@@ -89,7 +89,7 @@ frontend/
 │   │   └── About.jsx    # 关于
 │   └── components/
 │       └── SidePanel.jsx # 翻译/笔记/书签/图谱侧面板
-├── dist_vue/            # Vite 构建产物
+├── dist/            # Vite 构建产物
 └── vite.config.js       # Vite 配置
 ```
 

@@ -181,7 +181,7 @@ function createMainWindow() {
   });
 
   // 加载页面
-  const indexPath = path.join(__dirname, 'dist_vue', 'index.html');
+  const indexPath = path.join(__dirname, 'dist', 'index.html');
   mainWindow.loadFile(indexPath);
 
   // 显示窗口

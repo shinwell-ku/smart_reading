@@ -166,7 +166,7 @@ smart_reading/
 │   │   ├── api.js             # API 客户端
 │   │   ├── pages/             # 页面组件（Library/Reader/Settings/About）
 │   │   └── components/        # 组件（SidePanel）
-│   └── dist_vue/              # 构建产物
+│   └── dist/                   # 构建产物
 ├── data/                      # 本地数据
 │   ├── db/                    # SQLite 数据库
 │   ├── books/                 # 书籍文件

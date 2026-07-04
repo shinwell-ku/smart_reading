@@ -50,7 +50,7 @@ echo "[5/6] 编译前端..."
 cd "$DIR/frontend"
 npx vite build --logLevel error 2>/dev/null || echo "⚠️  前端编译失败"
 # 移除 crossorigin 属性以支持 Electron file:// 协议
-sed -i '' 's/ crossorigin//g' dist_vue/index.html 2>/dev/null || true
+sed -i '' 's/ crossorigin//g' dist/index.html 2>/dev/null || true
 
 echo "[6/6] 构建 Electron 安装包..."
 cd "$DIR/frontend"

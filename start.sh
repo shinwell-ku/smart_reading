@@ -21,7 +21,7 @@ fi
 # 构建 Vue 前端
 echo "[构建] 编译前端..."
 cd "$DIR/frontend"
-[ -f "dist_vue/index.html" ] || npx vite build --logLevel error 2>/dev/null || true
+[ -f "dist/index.html" ] || npx vite build --logLevel error 2>/dev/null || true
 
 echo "=============================="
 echo "   AI智慧阅读 启动中..."

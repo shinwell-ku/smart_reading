@@ -19,7 +19,7 @@
 cd frontend
 npm install                    # 安装依赖
 npm start                      # 编译 + 启动 Electron
-npm run build                  # 仅编译前端（输出到 dist_vue/）
+npm run build                  # 仅编译前端（输出到 dist/）
 npm run build:win              # 打包 Windows 安装包
 npm run build:mac              # 打包 macOS DMG
 ```
@@ -48,7 +48,7 @@ frontend/
 │   │   └── About.jsx        # 关于弹窗
 │   └── components/
 │       └── SidePanel.jsx    # 侧面板（翻译/笔记/书签/图谱）
-└── dist_vue/                # Vite 构建产物
+└── dist/                     # Vite 构建产物
 ```
 
 ## 功能
