@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from 'antd'
+import { ApartmentOutlined } from '@ant-design/icons'
 import { api } from './api'
 import Library from './pages/Library'
 import Reader from './pages/Reader'
@@ -16,7 +17,7 @@ export default function App() {
   const [backendOnline, setBackendOnline] = useState(false)
   const [sideTab, setSideTab] = useState('translate')
   const [panelCollapsed, setPanelCollapsed] = useState(false)
-  const [panelWidth, setPanelWidth] = useState(520)
+  const [panelWidth, setPanelWidth] = useState(480)
   const panelRef = useRef(null)
   const dragRef = useRef(null)
 
@@ -68,10 +69,10 @@ export default function App() {
         <div className="topbar-logo">
           <img src="./logo.png" alt="" /> AI智慧阅读
         </div>
-        <button className={`topbar-btn ${activeTab === 'library' ? 'active' : ''}`} onClick={() => handleMenu('library')}>📚 书库</button>
-        <button className={`topbar-btn ${activeTab === 'reader' ? 'active' : ''}`} disabled={!currentBook} onClick={() => handleMenu('reader')}>📖 阅读</button>
-        <button className="topbar-btn" onClick={() => handleMenu('settings')}>⚙️ 设置</button>
-        <button className="topbar-btn" onClick={() => handleMenu('about')}>ℹ️ 关于</button>
+        <Button className={`topbar-btn ${activeTab === 'library' ? 'active' : ''}`} onClick={() => handleMenu('library')}>📚 书库</Button>
+        <Button className={`topbar-btn ${activeTab === 'reader' ? 'active' : ''}`} disabled={!currentBook} onClick={() => handleMenu('reader')}>📖 阅读</Button>
+        <Button className="topbar-btn" onClick={() => handleMenu('settings')}>⚙️ 设置</Button>
+        <Button className="topbar-btn" onClick={() => handleMenu('about')}>ℹ️ 关于</Button>
         <div className="topbar-spacer" />
         <div className="topbar-status">
           <span className={`status-dot ${backendOnline ? 'online' : 'offline'}`} />
@@ -102,7 +103,7 @@ export default function App() {
                   const onMove = (ev) => {
                     const newW = startW - (ev.clientX - startX);
                     const maxW = window.innerWidth / 2;
-                    setPanelWidth(Math.max(280, Math.min(maxW, newW)));
+                    setPanelWidth(Math.max(420, Math.min(maxW, newW)));
                   };
                   const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
                   document.addEventListener('mousemove', onMove);
@@ -130,7 +131,7 @@ export default function App() {
                     { key: 'translate', label: '翻译', icon: '🌐' },
                     { key: 'notes', label: '笔记', icon: '📝' },
                     { key: 'bookmarks', label: '书签', icon: '🔖' },
-                    { key: 'knowledge', label: '图谱', icon: '🧠' },
+                    { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
                   ].map(tab => (
                     <div key={tab.key}
                       onClick={() => { setSideTab(tab.key); setPanelCollapsed(false) }}

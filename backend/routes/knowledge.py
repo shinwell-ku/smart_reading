@@ -13,12 +13,21 @@ from schemas import GraphData, GraphUpdate, MessageResponse
 
 knowledge_bp = Blueprint('knowledge', __name__, url_prefix='/api/knowledge')
 
+_running_tasks = set()
+_running_tasks_lock = threading.Lock()
+
 
 @knowledge_bp.route('/extract/<int:book_id>', methods=['POST'])
 def extract_knowledge(book_id):
     text_path = os.path.join(CACHE_DIR, f'book_{book_id}_text.txt')
     if not os.path.exists(text_path):
         return jsonify({"error": "书籍文本不存在，请先解析"}), 400
+
+    # 防止同一本书重复触发
+    with _running_tasks_lock:
+        if book_id in _running_tasks:
+            return jsonify({"message": "知识抽取任务正在进行中，请稍候", "book_id": book_id})
+        _running_tasks.add(book_id)
 
     def extract_task():
         try:
@@ -55,6 +64,9 @@ def extract_knowledge(book_id):
             db.commit()
         except Exception as e:
             print(f"[知识] 抽取失败: {e}")
+        finally:
+            with _running_tasks_lock:
+                _running_tasks.discard(book_id)
 
     thread = threading.Thread(target=extract_task, daemon=True)
     thread.start()

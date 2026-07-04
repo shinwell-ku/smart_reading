@@ -1,23 +1,30 @@
 """
-离线翻译服务 - 基于 NLLB-200 轻量化模型
-支持 200+ 语种双向互译，全 CPU 推理
+翻译服务 - 支持本地 NLLB 模型 / 远程 LLM API
 """
 import os
 import re
 import json
 import threading
 
+# ---------- 翻译指令模板 ----------
+TRANSLATE_SYSTEM_PROMPT = """You are a professional translator. Translate the following text from {source_lang} to {target_lang}.
+Rules:
+- Output ONLY the translation, no explanations, no notes.
+- Preserve the original formatting (paragraphs, line breaks).
+- If the text is already in {target_lang}, return it as-is."""
+
 
 class TranslatorService:
     """
-    离线翻译服务
+    翻译服务
     支持两种模式：
-    1. 划词翻译：短文本即时翻译
-    2. 全文翻译：长文本分块批量翻译
+    1. 本地模式：NLLB-200 离线模型
+    2. 远程模式：通过 OpenAI 兼容 API 调用外部 LLM
     """
 
-    def __init__(self, models_dir):
+    def __init__(self, models_dir, config=None):
         self.models_dir = models_dir
+        self._config = config  # TranslatorConfig 对象
         self._model = None
         self._tokenizer = None
         self._lock = threading.Lock()
@@ -110,8 +117,20 @@ class TranslatorService:
                 self._model = None
                 self._tokenizer = None
 
-    def _fallback_translate(self, text, target_lang):
+    def _fallback_translate(self, text, target_lang, model_loaded=False):
         """无模型时的回退翻译（基于简单规则/词典）"""
+
+        def _no_model_msg(tgt):
+            tn = self.LANG_MAP.get(tgt, tgt)
+            return (f"[模型未下载] AI 翻译模型 (NLLB-200) 未加载，"
+                    f"无法翻译为{tn}。\n"
+                    f"请运行以下命令下载模型：\n"
+                    f"  uv run python scripts/download_models.py nllb200_4bit")
+
+        def _model_error_msg(tgt):
+            tn = self.LANG_MAP.get(tgt, tgt)
+            return (f"[翻译失败] AI 模型加载或推理出错，无法翻译为{tn}。"
+                    f"请尝试重新下载模型或查看后端日志。")
         # 简单的中英文对照回退
         fallback_dict = {
             'zh': {
@@ -130,22 +149,39 @@ class TranslatorService:
                 translated = translated.replace(en, zh)
             return f"[离线模式] {translated}"
 
-        return f"[翻译模型加载中] {text}"
+        if model_loaded:
+            return _model_error_msg(target_lang)
+        return _no_model_msg(target_lang)
+
+    def _normalize_lang_code(self, lang):
+        """将 langdetect 返回的地区码（如 zh-cn）标准化为短码（如 zh）"""
+        if not lang:
+            return None
+        mapping = {
+            'zh-cn': 'zh', 'zh-tw': 'zh', 'zh-hk': 'zh', 'zh-sg': 'zh',
+            'en-us': 'en', 'en-gb': 'en', 'en-au': 'en', 'en-ca': 'en',
+            'pt-br': 'pt', 'pt-pt': 'pt',
+            'fr-ca': 'fr', 'fr-fr': 'fr',
+            'es-es': 'es', 'es-mx': 'es',
+            'de-de': 'de', 'de-at': 'de', 'de-ch': 'de',
+        }
+        return mapping.get(lang, lang)
 
     def detect_language(self, text):
         """检测文本语言（使用 langdetect 或简单启发式）"""
-        try:
-            from langdetect import detect
+        # langdetect 对短文本（<30字符）极不可靠，直接用启发式
+        use_langdetect = len(text.strip()) >= 30
+        if use_langdetect:
             try:
-                lang = detect(text[:500])
-                # 映射为标准代码
-                if lang in self.LANG_MAP:
-                    return lang
-                return 'en'
-            except:
+                from langdetect import detect
+                try:
+                    lang = self._normalize_lang_code(detect(text[:500]))
+                    if lang and lang in self.LANG_MAP:
+                        return lang
+                except:
+                    pass
+            except ImportError:
                 pass
-        except ImportError:
-            pass
 
         # 启发式检测
         zh_chars = len(re.findall(r'[一-鿿]', text))
@@ -168,8 +204,52 @@ class TranslatorService:
             return 'ko'
         return 'en'
 
+    def _translate_remote(self, text, source_lang, target_lang):
+        """通过远程 LLM API 翻译"""
+        cfg = self._config
+        if not cfg or cfg.mode != 'remote' or not cfg.remote.api_base or not cfg.remote.api_key:
+            return None
+
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(
+                base_url=cfg.remote.api_base,
+                api_key=cfg.remote.api_key,
+            )
+
+            src_name = self.LANG_MAP.get(source_lang, source_lang)
+            tgt_name = self.LANG_MAP.get(target_lang, target_lang)
+            system_prompt = TRANSLATE_SYSTEM_PROMPT.format(source_lang=src_name, target_lang=tgt_name)
+
+            resp = client.chat.completions.create(
+                model=cfg.remote.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text},
+                ],
+                max_tokens=cfg.remote.max_tokens,
+                temperature=cfg.remote.temperature,
+            )
+            translated = resp.choices[0].message.content.strip()
+            return translated
+        except Exception as e:
+            print(f"[翻译] 远程 API 调用失败: {e}")
+            return None
+
+    def _reload_config(self):
+        """重新加载配置（支持设置页面热切换）"""
+        try:
+            from core.translator_config import load_config
+            self._config = load_config()
+        except Exception:
+            pass
+
     def translate(self, text, source_lang='auto', target_lang='zh'):
         """翻译单段文本（划词/短文本翻译）"""
+        # 每次调用加载最新配置（支持设置页面热切换）
+        self._reload_config()
+
         if not text or not text.strip():
             return {"translated_text": "", "detected_lang": source_lang}
 
@@ -180,6 +260,13 @@ class TranslatorService:
         # 如果目标语言和源语言相同，直接返回
         if source_lang == target_lang:
             return {"translated_text": text, "detected_lang": source_lang}
+
+        # 远程模式优先
+        if self._config and self._config.mode == 'remote':
+            translated = self._translate_remote(text, source_lang, target_lang)
+            if translated:
+                return {"translated_text": translated, "detected_lang": source_lang}
+            print("[翻译] 远程翻译失败，回退本地模式")
 
         # 尝试加载模型翻译
         try:
@@ -207,8 +294,9 @@ class TranslatorService:
         except Exception as e:
             print(f"[翻译] 模型推理失败: {e}")
 
-        # 回退模式
-        fallback = self._fallback_translate(text, target_lang)
+        # 回退模式（区分模型是否加载过）
+        model_loaded = self._model is not None and self._tokenizer is not None
+        fallback = self._fallback_translate(text, target_lang, model_loaded=model_loaded)
         return {"translated_text": fallback, "detected_lang": source_lang}
 
     def translate_long_text(self, text, target_lang='zh', chunk_size=512):

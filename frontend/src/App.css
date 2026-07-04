@@ -54,10 +54,14 @@ html, body, #root { height: 100%; overflow: hidden; font-family: -apple-system, 
 .pdf-container .react-pdf__Page canvas { display: block; box-shadow: 0 2px 16px rgba(0,0,0,0.12); border-radius: 2px; }
 .reader-footer { display: flex; align-items: center; gap: 8px; padding: 2px 12px; border-top: 1px solid #e4e7ed; background: #fff; flex-shrink: 0; height: 38px; }
 .reader-footer .ant-slider { flex: 1; max-width: 300px; margin: 0 8px; }
+.reader-outline { width: 220px; border-right: 1px solid #e4e7ed; background: #fafafa; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+.outline-item { display: flex; align-items: center; padding: 5px 8px; cursor: pointer; font-size: 12px; color: #303133; border-left: 3px solid transparent; transition: all 0.1s; }
+.outline-item:hover { background: #e8edf5; }
+.outline-item.active { background: #e8f0fe; color: #409eff; border-left-color: #409eff; }
 
 /* SidePanel */
 .panel-body { display: flex; flex-direction: column; gap: 6px; padding: 12px; height: 100%; }
-.panel-controls { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+.panel-controls { display: flex; gap: 4px; flex-wrap: nowrap; flex-shrink: 0; align-items: center; }
 .panel-textarea { flex: 1; min-height: 60px; }
 .panel-textarea textarea { height: 100% !important; resize: none; }
 .panel-scroll { flex: 1; overflow-y: auto; }

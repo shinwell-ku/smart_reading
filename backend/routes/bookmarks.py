@@ -39,3 +39,18 @@ def delete_bookmark(bookmark_id):
         db.delete(bm)
         db.commit()
     return jsonify(MessageResponse(message="书签已删除").model_dump())
+
+
+@bookmarks_bp.route('/bookmarks/<int:bookmark_id>', methods=['PUT'])
+def update_bookmark(bookmark_id):
+    data = request.json
+    db = get_db()
+    bm = db.query(Bookmark).get(bookmark_id)
+    if not bm:
+        return jsonify({"error": "书签不存在"}), 404
+    if 'title' in data:
+        bm.title = data['title']
+    if 'page_num' in data:
+        bm.page_num = data['page_num']
+    db.commit()
+    return jsonify(BookmarkResponse.model_validate(bm).model_dump())

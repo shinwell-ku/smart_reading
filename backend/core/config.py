@@ -43,7 +43,9 @@ def get_doc_parser():
 
 def get_translator():
     from services.translator import TranslatorService
-    return _get_service('translator', lambda: TranslatorService(MODELS_DIR))
+    from core.translator_config import load_config
+    cfg = load_config()
+    return _get_service('translator', lambda: TranslatorService(MODELS_DIR, config=cfg))
 
 
 def get_knowledge_extractor():

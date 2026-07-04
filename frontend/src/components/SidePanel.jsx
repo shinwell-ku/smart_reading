@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
-import { Select, Button, Input, message } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
+import { Select, Button, Input, message, notification } from 'antd'
+import { DeleteOutlined, ApartmentOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
   if (!text) return ''
@@ -10,6 +10,9 @@ function cleanText(text) {
   t = t.replace(/([^\n])\n(?=[^\n])/g, '$1 ')
   t = t.replace(/[ \t]+/g, ' ')
   t = t.replace(/[-￰-￿​-‍﻿◀▶▲▼←→↑↓↔↕♦♥♣♠•●○◆◇■□▬▲△▼▽◆◇○◎●◐◑★☆☛☚✔✗✘‰‼‽‽]/g, '')
+  // 去掉页眉页脚：页码、页数等信息
+  t = t.replace(/第\s*\d+\s*\/\s*\d+\s*页.*?(?:\n|$)/g, '\n')
+  t = t.replace(/^\s*\d+\s*\n/gm, '')
   t = t.split('\n').map(l => l.trim()).join('\n').trim()
   return t
 }
@@ -18,7 +21,7 @@ const TABS = [
   { key: 'translate', label: '翻译', icon: '🌐' },
   { key: 'notes', label: '笔记', icon: '📝' },
   { key: 'bookmarks', label: '书签', icon: '🔖' },
-  { key: 'knowledge', label: '图谱', icon: '🧠' },
+  { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
 ]
 
 export default function SidePanel({ book, page, activeTab, onTabChange }) {
@@ -31,7 +34,11 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [noteText, setNoteText] = useState('')
   const [noteColor, setNoteColor] = useState('#FFD700')
   const [bookmarks, setBookmarks] = useState([])
+  const [editingBmId, setEditingBmId] = useState(null)
+  const [editingBmTitle, setEditingBmTitle] = useState('')
+  const [graphExists, setGraphExists] = useState(false)
   const graphRef = useRef(null)
+  const pollRef = useRef(null)
 
   useEffect(() => {
     const h = (e) => { if (e.detail) setSourceText(cleanText(e.detail.slice(0, 5000))) }
@@ -51,6 +58,16 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     window.addEventListener('refresh-bookmarks', h)
     return () => window.removeEventListener('refresh-bookmarks', h)
   }, [book])
+
+  // 切到图谱标签时自动加载（数据可能已在后台生成完毕）
+  useEffect(() => {
+    if (activeTab === 'knowledge' && book) loadGraph(book.id)
+  }, [activeTab, book])
+
+  // 组件卸载时清理后台轮询
+  useEffect(() => {
+    return () => { if (pollRef.current && typeof pollRef.current === 'number') clearInterval(pollRef.current); pollRef.current = null }
+  }, [])
 
   const translate = async () => {
     const t = sourceText.trim()
@@ -97,9 +114,14 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const loadGraph = async (bid) => {
     try {
       const data = await api.getKnowledgeGraph(bid)
-      if (!data.nodes || !data.nodes.length) return
+      if (!data.nodes || !data.nodes.length) {
+        setGraphExists(false)
+        return
+      }
+      setGraphExists(true)
       const echarts = (await import('echarts')).default
-      setTimeout(() => {
+      // 用 rAF 等 DOM 就绪后再初始化图表
+      requestAnimationFrame(() => {
         if (!graphRef.current) return
         const chart = echarts.init(graphRef.current)
         chart.setOption({
@@ -110,8 +132,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             force: { repulsion: 300, edgeLength: [60, 150] }, label: { show: true, position: 'right', fontSize: 10 },
           }]
         })
-      }, 200)
-    } catch {}
+      })
+    } catch (e) { console.error('[图谱] 加载失败:', e) }
   }
 
   // Language options
@@ -133,6 +155,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               <Select value={targetLang} onChange={setTargetLang} size="small" style={{ width: 100 }} options={langOpts.filter(o => o.value !== 'auto')} />
               <Button type="primary" size="small" onClick={translate} loading={translating}>翻译</Button>
               <Button size="small" onClick={fillPageText}>当前页</Button>
+              <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>清除</Button>
             </div>
             <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="选中文本后自动填充或点当前页" />
             <Input.TextArea className="panel-textarea" value={resultText} readOnly placeholder="翻译结果" />
@@ -164,8 +187,33 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto' }}>
               {bookmarks.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无书签</div> : bookmarks.map(b => (
                 <div key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', fontSize: 12, borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
-                  onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: b.page_num }))}>
-                  <span>第{b.page_num}页</span>
+                  onClick={() => { if (editingBmId !== b.id) window.dispatchEvent(new CustomEvent('go-to-page', { detail: b.page_num })) }}>
+                  <div style={{ flex: 1, minWidth: 0, marginRight: 8 }} onClick={e => e.stopPropagation()}>
+                    {editingBmId === b.id ? (
+                      <Input size="small" value={editingBmTitle} autoFocus
+                        onChange={e => setEditingBmTitle(e.target.value)}
+                        onBlur={async () => {
+                          if (editingBmTitle.trim()) {
+                            await api.updateBookmark(b.id, { title: editingBmTitle.trim() })
+                            const r = await api.getBookmarks(book.id)
+                            setBookmarks(r.bookmarks || [])
+                          }
+                          setEditingBmId(null)
+                        }}
+                        onPressEnter={async () => {
+                          if (editingBmTitle.trim()) {
+                            await api.updateBookmark(b.id, { title: editingBmTitle.trim() })
+                            const r = await api.getBookmarks(book.id)
+                            setBookmarks(r.bookmarks || [])
+                          }
+                          setEditingBmId(null)
+                        }}
+                      />
+                    ) : (
+                      <span onClick={() => { setEditingBmId(b.id); setEditingBmTitle(b.title || `第${b.page_num}页`) }} style={{ color: '#303133' }}>{b.title || `第${b.page_num}页`}</span>
+                    )}
+                  </div>
+                  <span style={{ color: '#909399', flexShrink: 0, fontSize: 11, marginRight: 4 }}>第{b.page_num}页</span>
                   <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }} />
                 </div>
               ))}
@@ -174,8 +222,55 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         )}
         {activeTab === 'knowledge' && (
           <div className="panel-body" style={{ flex: 1 }}>
-            <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }} />
-            <Button size="small" type="primary" onClick={async () => { if (!book) return; await api.extractKnowledge(book.id); message.success('知识抽取已启动'); setTimeout(() => loadGraph(book.id), 3000) }}>生成图谱</Button>
+            <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
+              {!graphExists && !pollRef.current && (
+                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 40, fontSize: 13 }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>🔗</div>
+                  暂无图谱数据，点击下方按钮生成
+                </div>
+              )}
+              {pollRef.current && (
+                <div style={{ textAlign: 'center', color: '#909399', padding: 40, fontSize: 13 }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>⏳</div>
+                  知识抽取中，完成后右下角会通知您
+                </div>
+              )}
+            </div>
+            <Button size="small" type={pollRef.current ? 'default' : 'primary'}
+              disabled={pollRef.current !== null}
+              style={pollRef.current ? { color: '#c0c4cc', borderColor: '#e4e7ed' } : {}}
+              onClick={() => {
+                if (!book || pollRef.current) return
+                // 立即锁定按钮，避免 await 期间重复点击
+                pollRef.current = 'lock'
+                const bid = book.id
+                api.extractKnowledge(bid).then(r => {
+                  message.success(r.message || '知识抽取已启动')
+                  if (!pollRef.current) return // 已取消（组件卸载）
+                  let attempts = 0
+                  pollRef.current = setInterval(async () => {
+                    attempts++
+                    try {
+                      const data = await api.getKnowledgeGraph(bid)
+                      if (data.nodes && data.nodes.length) {
+                        clearInterval(pollRef.current)
+                        pollRef.current = null
+                        setGraphExists(true)
+                        notification.info({
+                          message: '知识图谱',
+                          description: '知识抽取已完成',
+                          placement: 'bottomRight',
+                          duration: 6,
+                        })
+                        if (activeTab === 'knowledge') loadGraph(bid)
+                      }
+                    } catch {}
+                    if (attempts > 180) { clearInterval(pollRef.current); pollRef.current = null }
+                  }, 10000)
+                })
+              }}>
+              {pollRef.current ? '生成中...' : '生成图谱'}
+            </Button>
           </div>
         )}
       </div>

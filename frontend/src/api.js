@@ -30,6 +30,7 @@ export const api = {
   getBookmarks: (bid) => req('GET', `/api/books/${bid}/bookmarks`),
   addBookmark: (bid, data) => req('POST', `/api/books/${bid}/bookmarks`, data),
   deleteBookmark: (bid) => req('DELETE', `/api/bookmarks/${bid}`),
+  updateBookmark: (bid, data) => req('PUT', `/api/bookmarks/${bid}`, data),
   translate: (data) => req('POST', '/api/translate', data, 300000),
   translateFull: (data) => req('POST', '/api/translate/full', data),
   getTranslationStatus: (bid) => req('GET', `/api/translate/status/${bid}`),
@@ -38,4 +39,7 @@ export const api = {
   search: (bid, kw) => req('GET', `/api/search/${bid}?q=${encodeURIComponent(kw)}`),
   backup: () => req('POST', '/api/backup'),
   clearAllData: () => req('POST', '/api/data/clear'),
+  getTranslatorConfig: () => req('GET', '/api/settings/translator'),
+  updateTranslatorConfig: (data) => req('PUT', '/api/settings/translator', data),
+  getProviderPresets: () => req('GET', '/api/settings/translator/presets'),
 }

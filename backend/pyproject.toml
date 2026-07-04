@@ -27,6 +27,7 @@ dependencies = [
     # OCR 扫描识别
     "paddlepaddle>=2.6.0",
     "paddleocr>=2.7.0",
+    "openai>=2.44.0",
 ]
 
 [tool.uv]

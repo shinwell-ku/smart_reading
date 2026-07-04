@@ -14,6 +14,7 @@ def register_routes(app: Flask):
     from .translation import translation_bp
     from .knowledge import knowledge_bp
     from .search import search_bp
+    from .settings import settings_bp
 
     app.register_blueprint(system_bp)
     app.register_blueprint(books_bp)
@@ -23,3 +24,4 @@ def register_routes(app: Flask):
     app.register_blueprint(translation_bp)
     app.register_blueprint(knowledge_bp)
     app.register_blueprint(search_bp)
+    app.register_blueprint(settings_bp)

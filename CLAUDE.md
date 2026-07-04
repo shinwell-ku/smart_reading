@@ -87,7 +87,7 @@ frontend/
 
 ### Backend Service Modules
 - `document_parser.py` — PDF (PyMuPDF) / DOCX (python-docx) 解析，章节识别
-- `translator.py` — 离线翻译，优先加载 `data/models/nllb200_4bit`，无模型时静默回退
+- `translator.py` — 离线翻译，NLLB-200 模型（局部），无模型时回退规则翻译（仅 EN→ZH 方向有效）
 - `knowledge_extractor.py` — 规则+NLP混合知识抽取
 - `ocr_service.py` — PaddleOCR，扫描版PDF识别
 
@@ -113,6 +113,21 @@ data/
 
 Both are **optional** — the app degrades gracefully without them.
 
+### NLLB-200 Model State (as of 2026-07-04)
+
+- **格式**: `data/models/nllb200_4bit/model.safetensors` (2.3 GB, 已安装)
+- **原格式**: 最初为 `pytorch_model.bin`，因 transformers 4.57+ 对 `.bin` 文件强制 `weights_only=True`（CVE-2025-32434），要求 torch ≥ 2.6，与项目使用的 torch 2.2.2 不兼容。已转换为 safetensors 格式。
+- **下载命令**: `uv run python scripts/download_models.py nllb200_4bit --mirror`
+- **重要**: 重新下载后得到的 `.bin` 文件需要用上述方法转换为 safetensors，否则 `from_pretrained(local_files_only=True)` 会报 torch 版本错误。
+
+### Translator 已知问题
+
+- 语言检测用 `langdetect` + CJK 启发式混合策略
+- `langdetect` 不可靠的两种情况：
+  - 返回地区码（`zh-cn`、`en-us`）需映射为短码（`zh`、`en`），否则匹配不上 LANG_MAP → 误判为 `en` → 源=目标 → 返回原文
+  - 短文本（<30 字符）误判率高，例如 "Hello world" 被误判为荷兰语 `nl`
+- **修复**: `_normalize_lang_code()` 做地区码映射，短文本跳过 langdetect 直接走启发式
+
 ## Key Patterns
 
 - **零网络策略**: 所有 `transformers` / `AutoModel` 加载必须用 `local_files_only=True`
@@ -126,11 +141,13 @@ Both are **optional** — the app degrades gracefully without them.
 
 - **Python 3.10** — paddlepaddle/paddleocr 需要此版本
 - **`torch` 锁定 2.2.x** — Python 3.10 + macOS x86_64 最高版本
-- **`transformers < 5.0`** — 与 torch 2.2 兼容
+- **`transformers < 5.0`** — 与 torch 2.2 兼容。uv 环境实际安装 transformers 4.48.3
 - **`numpy < 2.0`** — torch 2.2 要求 numpy 1.x
 
 ## Quality Notes
 
-- 翻译模型未下载时自动回退规则翻译
+- 翻译模型未加载时回退规则翻译（仅 EN→ZH 方向有效，其他语言方向显示下载提示）
+- 语言检测使用 `langdetect` + CJK 启发式，短文本（<30 字符）绕过 langdetect 直接走启发式
 - 知识抽取模型未下载时使用纯正则规则
 - PaddleOCR 首次加载耗时约 30-60s
+- Reader 同时支持 PDF（react-pdf 渲染）和 DOCX（文本分页渲染，白底黑字带阴影）

@@ -10,41 +10,82 @@ export default function Reader({ book, onPageChange, onBack }) {
   const [numPages, setNumPages] = useState(0)
   const [page, setPage] = useState(1)
   const [scale, setScale] = useState(1)
+  const [docxFontSize, setDocxFontSize] = useState(15)
   const [loading, setLoading] = useState(true)
   const [pdfData, setPdfData] = useState(null)
+  const [docxContent, setDocxContent] = useState('')
+  const [loadingContent, setLoadingContent] = useState(false)
   const viewerRef = useRef(null)
   const pageRef = useRef(page)
   pageRef.current = page
   const pdfRef = useRef(null)
 
-  // Load PDF
+  const isDocx = book?.file_type === 'docx'
+  const chapters = book?.chapters || []
+  const [outlineOpen, setOutlineOpen] = useState(false)
+
+  // Load document
   useEffect(() => {
-    if (!book || book.file_type !== 'pdf') return
+    if (!book) return
     setLoading(true)
     setPdfData(null)
+    setDocxContent('')
     setPage(1)
     setNumPages(0)
 
-    ;(async () => {
-      try {
-        // 恢复进度
-        let restoredPage = 1
-        try { const p = await api.getProgress(book.id); if (p?.current_page > 1) restoredPage = p.current_page } catch {}
-        setPage(restoredPage)
-        onPageChange(restoredPage)
+    if (isDocx) {
+      // DOCX: 从 API 获取分页数据
+      ;(async () => {
+        try {
+          // 恢复进度
+          let restoredPage = 1
+          try { const p = await api.getProgress(book.id); if (p?.current_page > 1) restoredPage = p.current_page } catch {}
+          setPage(restoredPage)
+          onPageChange(restoredPage)
+          setNumPages(book.total_pages || 0)
+          setLoading(false)
+          // 加载第一页内容
+          await loadDocxContent(restoredPage)
+        } catch (e) {
+          console.error('DOCX load error:', e)
+          message.error('文档加载失败')
+          setLoading(false)
+        }
+      })()
+    } else {
+      // PDF: 通过 fetch 获取
+      ;(async () => {
+        try {
+          let restoredPage = 1
+          try { const p = await api.getProgress(book.id); if (p?.current_page > 1) restoredPage = p.current_page } catch {}
+          setPage(restoredPage)
+          onPageChange(restoredPage)
 
-        // 通过 fetch 获取 PDF（Uint8Array 格式）
-        const resp = await fetch(`http://127.0.0.1:5001/api/books/${book.id}/file`)
-        const buffer = await resp.arrayBuffer()
-        setPdfData({ data: new Uint8Array(buffer) })
-        setLoading(false)
-      } catch (e) {
-        console.error('PDF load error:', e)
-        message.error('PDF 加载失败')
-        setLoading(false)
-      }
-    })()
+          const resp = await fetch(`http://127.0.0.1:5001/api/books/${book.id}/file`)
+          const buffer = await resp.arrayBuffer()
+          setPdfData({ data: new Uint8Array(buffer) })
+          setLoading(false)
+        } catch (e) {
+          console.error('PDF load error:', e)
+          message.error('PDF 加载失败')
+          setLoading(false)
+        }
+      })()
+    }
   }, [book])
+
+  const loadDocxContent = async (pageNum) => {
+    if (!book) return
+    setLoadingContent(true)
+    try {
+      const r = await api.getPageContent(book.id, pageNum)
+      setDocxContent(r.content || '')
+    } catch (e) {
+      console.error('Page content load error:', e)
+      setDocxContent('')
+    }
+    setLoadingContent(false)
+  }
 
   const fitToWidth = useCallback(async () => {
     const pdf = pdfRef.current
@@ -63,7 +104,6 @@ export default function Reader({ book, onPageChange, onBack }) {
     setNumPages(pdf.numPages)
     pdfRef.current = pdf
     fitToWidth()
-    // 监听容器尺寸变化（拖拽面板时自动缩放）
     if (viewerRef.current && !viewerRef.current._resizeObs) {
       const obs = new ResizeObserver(() => fitToWidth())
       obs.observe(viewerRef.current)
@@ -71,7 +111,7 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
   }, [fitToWidth])
 
-  // 选中文本 → 广播
+  // 选中文本 → 广播（PDF 和 DOCX 共用）
   const handleSelect = useCallback(() => {
     setTimeout(() => {
       const sel = window.getSelection()
@@ -88,7 +128,10 @@ export default function Reader({ book, onPageChange, onBack }) {
     setPage(p)
     onPageChange(p)
     saveProgress(p)
-  }, [numPages, onPageChange])
+    if (isDocx) {
+      loadDocxContent(p)
+    }
+  }, [numPages, onPageChange, isDocx, book])
 
   const prevPage = useCallback(() => goTo(page - 1), [page, goTo])
   const nextPage = useCallback(() => goTo(page + 1), [page, goTo, numPages])
@@ -102,7 +145,11 @@ export default function Reader({ book, onPageChange, onBack }) {
       if (!numPages) return
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
-        setScale(s => Math.max(0.5, Math.min(3, s + (e.deltaY > 0 ? -0.15 : 0.15))))
+        if (isDocx) {
+          setDocxFontSize(s => Math.max(9, Math.min(36, s + (e.deltaY > 0 ? -2 : 2))))
+        } else {
+          setScale(s => Math.max(0.5, Math.min(3, s + (e.deltaY > 0 ? -0.15 : 0.15))))
+        }
         return
       }
       const now = Date.now()
@@ -113,11 +160,11 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
-  }, [numPages, goTo])
+  }, [numPages, goTo, isDocx])
 
   // 监听书签跳转事件
   useEffect(() => {
-    const h = (e) => { if (e.detail && pdfRef.current) goTo(e.detail) }
+    const h = (e) => { if (e.detail) goTo(e.detail) }
     window.addEventListener('go-to-page', h)
     return () => window.removeEventListener('go-to-page', h)
   }, [goTo])
@@ -128,11 +175,30 @@ export default function Reader({ book, onPageChange, onBack }) {
       if (!numPages) return
       if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goTo(pageRef.current - 1) }
       else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goTo(pageRef.current + 1) }
-      else if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) { e.preventDefault(); setScale(s => Math.min(3, s + 0.2)) }
+      else if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault()
+        if (isDocx) setDocxFontSize(s => Math.min(36, s + 2))
+        else setScale(s => Math.min(3, s + 0.2))
+      }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [numPages, goTo])
+  }, [numPages, goTo, isDocx])
+
+  // 递归渲染章节树
+  const renderChapters = (items, indent, curPage, onGo) => {
+    return items.map((ch, i) => (
+      <div key={i}>
+        <div className={`outline-item ${ch.page === curPage ? 'active' : ''}`}
+          style={{ paddingLeft: 12 + indent * 16 }}
+          onClick={() => { setOutlineOpen(false); onGo(ch.page) }}>
+          <span style={{ fontSize: 11, color: '#909399', marginRight: 4 }}>第{ch.page}页</span>
+          <span>{ch.title}</span>
+        </div>
+        {ch.children && ch.children.length > 0 && renderChapters(ch.children, indent + 1, curPage, onGo)}
+      </div>
+    ))
+  }
 
   let _saveTimer = null
   const saveProgress = (p) => {
@@ -148,15 +214,42 @@ export default function Reader({ book, onPageChange, onBack }) {
       <div className="reader-toolbar">
         <Button type="text" onClick={onBack}>←</Button>
         <span className="reader-title">{book?.title || ''}</span>
-        <Button type="text" disabled={!numPages} onClick={() => setScale(s => Math.max(0.5, s - 0.2))}>−</Button>
-        <span style={{ fontSize: 12, color: '#909399', minWidth: 36, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
-        <Button type="text" disabled={!numPages} onClick={() => setScale(s => Math.min(3, s + 0.2))}>+</Button>
+        <Button type="text" disabled={!chapters.length} onClick={() => setOutlineOpen(v => !v)} style={{ color: outlineOpen ? '#409eff' : undefined }}>📑</Button>
+        <Button type="text" disabled={!numPages} onClick={() => {
+          if (isDocx) setDocxFontSize(s => Math.max(9, s - 2))
+          else setScale(s => Math.max(0.5, s - 0.2))
+        }}>−</Button>
+        <span style={{ fontSize: 12, color: '#909399', minWidth: 36, textAlign: 'center' }}>
+          {isDocx ? Math.round(docxFontSize / 15 * 100) + '%' : Math.round(scale * 100) + '%'}
+        </span>
+        <Button type="text" disabled={!numPages} onClick={() => {
+          if (isDocx) setDocxFontSize(s => Math.min(36, s + 2))
+          else setScale(s => Math.min(3, s + 0.2))
+        }}>+</Button>
         <Button type="text" disabled={!numPages} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success('书签已添加: 第' + page + '页'); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }}>🔖</Button>
         <Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button>
-        </div>
+      </div>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {outlineOpen && chapters.length > 0 && (
+          <div className="reader-outline">
+            <div style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, color: '#606266', borderBottom: '1px solid #e4e7ed' }}>目录</div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+              {renderChapters(chapters, 0, page, goTo)}
+            </div>
+          </div>
+        )}
       <div className="pdf-container" ref={viewerRef} onMouseUp={handleSelect}>
         {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>}
-        {pdfData && (
+        {!loading && isDocx && (
+          <div className="docx-viewer" style={{ background: '#fff', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', borderRadius: 2, padding: '40px 56px', maxWidth: 800, width: '100%', margin: '0 auto', lineHeight: 1.9, fontSize: docxFontSize, color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {loadingContent ? (
+              <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>
+            ) : (
+              docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>暂无内容</div>
+            )}
+          </div>
+        )}
+        {!loading && !isDocx && pdfData && (
           <Document
             file={pdfData}
             onLoadSuccess={onLoadSuccess}
@@ -170,6 +263,7 @@ export default function Reader({ book, onPageChange, onBack }) {
             />
           </Document>
         )}
+      </div>
       </div>
       <div className="reader-footer">
         <Button type="text" disabled={page <= 1} onClick={prevPage}>◀</Button>
