@@ -34,6 +34,26 @@ VENV_PYTHON="$RES_DIR/backend/.venv/bin/python3"
 [ ! -f "$VENV_PYTHON" ] && [ -f "$RES_DIR/backend/.venv/bin/python" ] && \
   ln -sf python "$VENV_PYTHON"
 
+# 复制 Python 标准库，使 venv 脱离本机环境也能运行
+PYTHON_REAL=$(python3 -c "import os; print(os.path.realpath('$BACKEND_SRC/.venv/bin/python'))" 2>/dev/null)
+PYTHON_HOME=$(dirname "$(dirname "$PYTHON_REAL")")
+if [ -d "$PYTHON_HOME/lib/python3.10" ]; then
+  echo "  复制 Python 标准库 (33MB)..."
+  rsync -a --exclude='site-packages' --exclude='test' --exclude='tests' --exclude='__pycache__' --exclude='*.pyc' \
+    "$PYTHON_HOME/lib/python3.10/" "$RES_DIR/backend/.venv/lib/python3.10/"
+  # 复制 libpython3.10.dylib（Python 运行时链接库，15MB）
+  if [ -f "$PYTHON_HOME/lib/libpython3.10.dylib" ]; then
+    cp "$PYTHON_HOME/lib/libpython3.10.dylib" "$RES_DIR/backend/.venv/lib/"
+    echo "  复制 libpython3.10.dylib (15MB)"
+  fi
+  # 更新 pyvenv.cfg，home 指向 venv 内的 bin 目录
+  VENV_BIN="$(cd "$RES_DIR/backend/.venv/bin" && pwd)"
+  sed -i '' "s|^home = .*|home = $VENV_BIN|" "$RES_DIR/backend/.venv/pyvenv.cfg"
+  echo "  pyvenv.cfg 已更新"
+else
+  echo "  ⚠️  未找到 Python 标准库路径: $PYTHON_HOME/lib/python3.10"
+fi
+
 echo "[3/5] 复制 AI 模型..."
 if [ -d "$DATA_SRC/models" ] && [ "$(ls -A "$DATA_SRC/models" 2>/dev/null)" ]; then
   rsync -a "$DATA_SRC/models/" "$RES_DIR/data/models/"
