@@ -31,7 +31,7 @@ uv run python ../scripts/download_models.py nllb200_4bit --mirror  # 下载翻�
 cd frontend
 npm install                      # 安装依赖
 npm start                        # 编译 + 启动 Electron
-npm run build:vue                # 仅编译前端
+npm run build                    # 仅编译前端
 npm run build:win                # 打包 Windows
 npm run build:mac                # 打包 macOS
 ```

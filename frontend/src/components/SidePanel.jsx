@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
   if (!text) return ''
@@ -152,7 +153,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <div key={n.id} style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), background: '#f5f7fa', fontSize: 12 }}>
                   <div>{n.content}</div>
                   <div style={{ fontSize: 11, color: '#909399' }}>第{n.page_num}页</div>
-                  <Button type="text" size="small" danger onClick={() => deleteNote(n.id)}>删除</Button>
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => deleteNote(n.id)} />
                 </div>
               ))}
             </div>
@@ -165,7 +166,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <div key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', fontSize: 12, borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
                   onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: b.page_num }))}>
                   <span>第{b.page_num}页</span>
-                  <Button type="text" size="small" danger onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }}>删除</Button>
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }} />
                 </div>
               ))}
             </div>

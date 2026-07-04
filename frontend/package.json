@@ -7,9 +7,9 @@
     "build:win": "bash ../scripts/build_package.sh win",
     "build:mac": "bash ../scripts/build_package.sh mac",
     "build:all": "bash ../scripts/build_package.sh all",
-    "start": "vite build && sed -i '' 's/ crossorigin//g' dist_vue/index.html && electron .",
-    "dev": "vite build && sed -i '' 's/ crossorigin//g' dist_vue/index.html && electron . --dev",
-    "build:vue": "vite build && sed -i '' 's/ crossorigin//g' dist_vue/index.html"
+    "build": "vite build && sed -i '' 's/ crossorigin//g' dist_vue/index.html",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --dev"
   },
   "author": "Shinwell",
   "license": "MIT",
