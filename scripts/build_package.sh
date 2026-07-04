@@ -43,10 +43,14 @@ else
   echo "  无模型，跳过"
 fi
 
-echo "[4/5] 创建数据目录..."
+echo "[4/6] 创建数据目录..."
 for d in db books cache exports; do mkdir -p "$RES_DIR/data/$d"; done
 
-echo "[5/5] 构建 Electron 安装包..."
+echo "[5/6] 编译 Vue 前端..."
+cd "$DIR/electron"
+npx vite build --logLevel error 2>/dev/null || echo "⚠️  前端编译失败"
+
+echo "[6/6] 构建 Electron 安装包..."
 cd "$DIR/electron"
 
 case "$1" in

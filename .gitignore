@@ -14,6 +14,7 @@ electron/node_modules/
 
 # Build output
 electron/dist/
+electron/dist_vue/
 electron/build-resources/
 electron/src/lib/echarts.min.js
 electron/build/resources/logo_topbar.png

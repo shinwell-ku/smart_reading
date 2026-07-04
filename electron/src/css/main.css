@@ -123,8 +123,10 @@ input:focus, textarea:focus, select:focus { border-color: var(--el-color-primary
 .reader-toolbar { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-bottom: 1px solid var(--el-border-light); background: var(--el-bg-card); flex-shrink: 0; }
 .reader-title { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toolbar-spacer { flex: 1; }
-.pdf-viewer { flex: 1; overflow-y: auto; padding: 14px 28px; background: var(--el-bg); display: flex; justify-content: center; }
-.pdf-viewer .pdf-canvas { box-shadow: 0 2px 12px rgba(0,0,0,0.1); border-radius: 2px; max-width: 100%; height: auto; }
+.pdf-viewer { flex: 1; overflow-y: auto; padding: 16px 24px; background: #525659; display: flex; flex-direction: column; align-items: center; position: relative; }
+.pdf-canvas { box-shadow: 0 2px 16px rgba(0,0,0,0.15); border-radius: 2px; }
+.pdf-text-layer svg text { user-select: text; -webkit-user-select: text; cursor: text; }
+.pdf-viewer ::selection { background: rgba(64,158,255,0.45); }
 .pdf-page {
   max-width: 700px; margin: 0 auto; background: var(--el-bg-card);
   padding: 24px 32px; border-radius: var(--el-radius); box-shadow: var(--el-shadow);
@@ -159,7 +161,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--el-color-primary
 .mode-option input { display: none; }
 .lang-selector { display: flex; gap: 4px; align-items: center; }
 .lang-selector select { padding: 4px 6px; border: 1px solid var(--el-border); border-radius: var(--el-radius); font-size: 12px; min-width: 58px; flex: 1; background: var(--el-bg-card); }
-#sideSourceText { padding: 6px 8px; border: 1px solid var(--el-border); border-radius: var(--el-radius); resize: vertical; font-size: 13px; line-height: 1.6; min-height: 50px; }
+#sideSourceText { padding: 6px 8px; border: 1px solid var(--el-border); border-radius: var(--el-radius); resize: vertical; font-size: 13px; line-height: 1.6; min-height: 80px; }
 #sideSourceText:focus { border-color: var(--el-color-primary); }
 .translation-result { padding: 8px; font-size: 13px; line-height: 1.6; background: var(--el-bg); border-radius: var(--el-radius); min-height: 50px; color: var(--el-text-dim); }
 
@@ -198,6 +200,8 @@ input:focus, textarea:focus, select:focus { border-color: var(--el-color-primary
 }
 .btn-icon:hover { background: var(--el-bg-hover); color: var(--el-color-primary); }
 .btn-icon:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-icon.active { background: var(--el-bg-hover); color: var(--el-color-primary); }
+.toolbar-divider { width: 1px; height: 20px; background: var(--el-border-light); margin: 0 4px; }
 
 /* ===================== Toast ===================== */
 .toast {

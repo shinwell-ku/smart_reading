@@ -6,6 +6,7 @@
 const API_BASE = 'http://127.0.0.1:5001';
 
 const api = {
+  base: API_BASE,
   // ─── 健康检查 ───
   async checkHealth() {
     try {

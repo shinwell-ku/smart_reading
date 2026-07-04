@@ -4,20 +4,27 @@
   "description": "AI智慧阅读 - 纯离线单机智能阅读软件",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "build:vite": "vite build",
     "build:win": "bash ../scripts/build_package.sh win",
     "build:mac": "bash ../scripts/build_package.sh mac",
     "build:all": "bash ../scripts/build_package.sh all",
-    "dev": "electron . --dev"
+    "build:vue": "vite build",
+    "start": "vite build && electron .",
+    "dev:vue": "vite build --watch",
+    "dev": "vite build && electron . --dev"
   },
-  "author": "",
+  "author": "Shinwell",
   "license": "MIT",
   "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
     "echarts": "^6.1.0",
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "vite": "^5.0.0"
   },
   "dependencies": {
-    "pdfjs-dist": "3.11.174"
+    "element-plus": "^2.5.0",
+    "pdfjs-dist": "3.11.174",
+    "vue": "^3.4.0"
   }
 }

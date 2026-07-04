@@ -188,6 +188,16 @@ def import_book_by_path():
         return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR"}), 500
 
 
+@books_bp.route('/<int:book_id>/file', methods=['GET'])
+def get_book_file(book_id):
+    """获取原始 PDF 文件（供 PDF.js 加载）"""
+    db = get_db()
+    book = db.query(Book).get(book_id)
+    if not book or not os.path.exists(book.file_path):
+        return jsonify({"error": "文件不存在"}), 404
+    return send_file(book.file_path, mimetype='application/pdf')
+
+
 @books_bp.route('', methods=['GET'])
 def list_books():
     db = get_db()

@@ -99,7 +99,12 @@ function startPythonBackend() {
     });
 
     pythonProcess.stderr.on('data', (data) => {
-      console.error(`[Python ERR] ${data}`);
+      const msg = data.toString();
+      if (msg.includes('Error') || msg.includes('Traceback') || msg.includes('ERROR')) {
+        console.error(`[Python ERR] ${msg}`);
+      } else {
+        console.log(`[Python LOG] ${msg}`);
+      }
     });
 
     pythonProcess.on('error', (err) => {
@@ -176,7 +181,7 @@ function createMainWindow() {
   });
 
   // 加载页面
-  const indexPath = path.join(__dirname, 'src', 'index.html');
+  const indexPath = path.join(__dirname, 'dist_vue', 'index.html');
   mainWindow.loadFile(indexPath);
 
   // 显示窗口

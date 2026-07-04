@@ -7,8 +7,31 @@ const Translation = {
   },
 
   async translate() {
-    const text = $('#sideSourceText').value.trim();
-    if (!text) { showToast('请输入要翻译的文本'); return; }
+    let text = $('#sideSourceText').value.trim();
+
+    // 如果输入框为空，尝试从 PDF iframe 获取选中文本
+    if (!text) {
+      let selText = '';
+      try {
+        const iframe = document.getElementById('pdfFrame');
+        // 方法1：直接访问 contentWindow（需同源）
+        if (iframe && iframe.contentWindow) {
+          const sel = iframe.contentWindow.getSelection();
+          if (sel && sel.toString().trim()) selText = sel.toString().trim();
+        }
+      } catch {
+        // 方法2：尝试通过 postMessage（需 PDF viewer 支持）
+        try {
+          const iframe = document.getElementById('pdfFrame');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage('getSelection', '*');
+          }
+        } catch {}
+      }
+      if (selText) { text = selText; $('#sideSourceText').value = text; }
+    }
+
+    if (!text) { showToast('请输入要翻译的文本，或在 PDF 中选中文本'); return; }
     const sourceLang = $('#sideSourceLang').value;
     const targetLang = $('#sideTargetLang').value;
     $('#sideTranslateResult').textContent = '翻译中...';
@@ -63,6 +86,12 @@ const Translation = {
     $('#btnSideTranslate').addEventListener('click', () => this.translate());
     $('#btnFullTranslateSide').addEventListener('click', () => this.fullTranslate());
     $('#btnSideSwapLang').addEventListener('click', () => this.swapLangs());
+    $('#btnGetPageText').addEventListener('click', () => {
+      const content = Reader.pages[Reader.currentPage - 1];
+      if (!content || !content.trim()) { showToast('当前页无文本内容'); return; }
+      $('#sideSourceText').value = content.slice(0, 2000);
+      showToast('已填入当前页文本');
+    });
     // Ctrl+Enter 触发翻译
     $('#sideSourceText').addEventListener('keydown', e => {
       if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); this.translate(); }

@@ -64,8 +64,14 @@
             <span id="readerTitle" class="reader-title">未选择书籍</span>
             <div class="toolbar-spacer"></div>
             <button class="btn-icon" id="btnBookmark" title="添加书签">🔖</button>
+            <span class="toolbar-spacer"></span>
+            <button class="btn-icon" id="btnZoomOut" title="缩小">−</button>
+            <span id="zoomLevel" style="font-size:12px;color:var(--el-text-dim);min-width:36px;text-align:center">100%</span>
+            <button class="btn-icon" id="btnZoomIn" title="放大">+</button>
+            <div class="toolbar-divider"></div>
+            <button class="btn-icon active" id="btnPageMode" title="切换阅读模式">📄</button>
             <button class="btn-icon" id="btnFullscreen" title="全屏">⛶</button>
-            <button class="btn-icon" id="btnTogglePanel" title="折叠侧面板">«</button>
+            <button class="btn-icon" id="btnTogglePanel" title="折叠侧面板">»</button>
           </div>
           <div id="pdfViewer" class="pdf-viewer">
             <div class="empty-state">
@@ -121,8 +127,9 @@
                   <option value="ko">한국어</option>
                 </select>
                 <button class="btn btn-primary btn-sm" id="btnSideTranslate">翻译</button>
+                <button class="btn btn-secondary btn-sm" id="btnGetPageText">📄 当前页</button>
               </div>
-              <textarea id="sideSourceText" placeholder="在左侧选中文本，或切换「当前页」「自动」模式..." rows="2" readonly></textarea>
+              <textarea id="sideSourceText" placeholder="选中文本 → 翻译 / 当前页 → 整页翻译" rows="4"></textarea>
               <div id="sideTranslateResult" class="translation-result">等待翻译...</div>
             </div>
           </div>
@@ -304,7 +311,11 @@
 
   <script src="lib/echarts.min.js"></script>
   <script src="lib/pdfjs/pdf.min.js"></script>
-  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdfjs/pdf.min.js';</script>
+  <script>
+    // 禁用 worker 避免加载问题，使用主线程解析
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    pdfjsLib.disableWorker = true;
+  </script>
   <script src="js/utils.js"></script>
   <script src="js/api.js"></script>
   <script src="js/library.js"></script>
@@ -312,5 +323,14 @@
   <script src="js/translation.js"></script>
   <script src="js/knowledge.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    // Cmd/Ctrl + R 刷新页面（菜单去掉后快捷键失效的补救）
+    document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+        e.preventDefault();
+        location.reload();
+      }
+    });
+  </script>
 </body>
 </html>
