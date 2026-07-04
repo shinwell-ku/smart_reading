@@ -98,10 +98,17 @@ const App = {
           if (dot) dot.className = 'status-dot ' + (online ? 'online' : 'offline');
           if (txt) txt.textContent = online ? '服务已就绪' : '服务离线';
         }
-      } catch { if (this.backendOnline) { this.backendOnline = false; } }
+      } catch {
+        if (this.backendOnline) {
+          this.backendOnline = false;
+          const dot = $('.status-dot'), txt = $('.status-text');
+          if (dot) dot.className = 'status-dot offline';
+          if (txt) txt.textContent = '服务离线';
+        }
+      }
     };
     await check();
-    this.healthCheckTimer = setInterval(check, 10000);
+    this.healthCheckTimer = setInterval(check, 3000);
   },
 
   bindSettings() {

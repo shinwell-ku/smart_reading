@@ -88,6 +88,106 @@ def import_book():
         return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR"}), 500
 
 
+@books_bp.route('/import_by_path', methods=['POST'])
+def import_book_by_path():
+    """直接通过本地路径导入（前后端同机时使用，避免 HTTP 上传）"""
+    data = request.json
+    src_path = data.get('path', '')
+    if not src_path or not os.path.exists(src_path):
+        return jsonify({"error": "文件不存在", "code": "FILE_NOT_FOUND"}), 400
+
+    filename = os.path.basename(src_path).lower()
+    if not (filename.endswith('.pdf') or filename.endswith('.docx')):
+        return jsonify({"error": "仅支持 PDF 和 DOCX 格式", "code": "UNSUPPORTED_FORMAT"}), 400
+
+    # 复制到书籍目录
+    dest_path = os.path.join(BOOKS_DIR, os.path.basename(src_path))
+    counter = 1
+    name, ext = os.path.splitext(dest_path)
+    while os.path.exists(dest_path):
+        dest_path = f"{name}_{counter}{ext}"
+        counter += 1
+
+    import shutil
+    shutil.copy2(src_path, dest_path)
+
+    # 解析 + 入库（复用已有逻辑）
+    try:
+        parser = get_doc_parser()
+        result = parser.parse(dest_path)
+
+        db = get_db()
+        book = Book(
+            title=result.get('title', filename),
+            author=result.get('author', '未知'),
+            file_path=dest_path,
+            file_type='pdf' if filename.endswith('.pdf') else 'docx',
+            total_pages=result.get('total_pages', 0),
+            total_chars=result.get('total_chars', 0),
+            chapter_tree=json.dumps(result.get('chapters', []), ensure_ascii=False),
+            is_scan_pdf=1 if result.get('is_scan_pdf') else 0,
+            status='ready',
+        )
+        db.add(book)
+        db.commit()
+        db.refresh(book)
+
+        full_text = result.get('full_text', '')
+        with open(os.path.join(CACHE_DIR, f'book_{book.id}_text.txt'), 'w', encoding='utf-8') as f:
+            f.write(full_text)
+
+        pages = result.get('pages', [])
+        with open(os.path.join(CACHE_DIR, f'book_{book.id}_pages.json'), 'w', encoding='utf-8') as f:
+            json.dump(pages, f, ensure_ascii=False)
+
+        # 生成封面
+        try:
+            cover_path = os.path.join(CACHE_DIR, f'book_{book.id}_cover.png')
+            import fitz
+            doc = fitz.open(dest_path)
+            if doc.page_count > 0:
+                page = doc.load_page(0)
+                pix = page.get_pixmap(matrix=fitz.Matrix(1.0, 1.0))
+                pix.save(cover_path)
+            doc.close()
+        except Exception:
+            pass
+
+        # 扫描版 PDF：后台启动 OCR
+        if result.get('is_scan_pdf') and result.get('total_pages', 0) > 0:
+            def ocr_task(bid, fp):
+                try:
+                    from services.ocr_service import OCRService
+                    from core.config import MODELS_DIR
+                    ocr = OCRService(MODELS_DIR)
+                    texts = ocr.recognize_full_pdf(fp)
+                    # 保存 OCR 结果
+                    pages_path = os.path.join(CACHE_DIR, f'book_{bid}_pages.json')
+                    text_path = os.path.join(CACHE_DIR, f'book_{bid}_text.txt')
+                    with open(pages_path, 'w', encoding='utf-8') as f:
+                        json.dump(texts, f, ensure_ascii=False)
+                    with open(text_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(texts))
+                    print(f"[OCR] 书籍 {bid} OCR 完成")
+                except Exception as e:
+                    print(f"[OCR] 失败: {e}")
+            import threading
+            thread = threading.Thread(target=ocr_task, args=(book.id, dest_path), daemon=True)
+            thread.start()
+
+        return jsonify(BookImportResult(
+            book_id=book.id, title=book.title,
+            total_pages=book.total_pages, total_chars=book.total_chars,
+            chapters=json.loads(book.chapter_tree) if book.chapter_tree else [],
+            is_scan_pdf=bool(book.is_scan_pdf),
+        ).model_dump())
+
+    except Exception as e:
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR"}), 500
+
+
 @books_bp.route('', methods=['GET'])
 def list_books():
     db = get_db()
@@ -165,7 +265,7 @@ def get_book_cover(book_id):
     if os.path.exists(cover_path):
         return send_file(cover_path, mimetype='image/png')
 
-    # 尝试即时生成封面
+    # 尝试即时生成封面（放大分辨率 + 健壮处理）
     try:
         db = get_db()
         book = db.query(Book).get(book_id)
@@ -174,18 +274,32 @@ def get_book_cover(book_id):
             doc = fitz.open(book.file_path)
             if doc.page_count > 0:
                 page = doc.load_page(0)
-                pix = page.get_pixmap(matrix=fitz.Matrix(0.5, 0.5))
+                # 使用 1.0 倍率获得较清晰的缩略图
+                mat = fitz.Matrix(1.0, 1.0)
+                pix = page.get_pixmap(matrix=mat)
                 pix.save(cover_path)
             doc.close()
             if os.path.exists(cover_path):
                 return send_file(cover_path, mimetype='image/png')
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[封面] 生成失败: {e}")
 
-    # 无封面：返回 SVG 占位
+    # 无封面：返回书籍文件类型占位图
+    try:
+        db = get_db()
+        book = db.query(Book).get(book_id)
+        file_type = book.file_type if book else 'pdf'
+    except Exception:
+        file_type = 'pdf'
+
+    color = '#e74c3c' if file_type == 'pdf' else '#3498db'
+    emoji = '📕' if file_type == 'pdf' else '📘'
     from flask import Response
-    placeholder = '''<svg xmlns="http://www.w3.org/2000/svg" width="200" height="260" viewBox="0 0 200 260">
-      <rect width="200" height="260" rx="8" fill="#f0f0f0"/>
-      <text x="100" y="130" text-anchor="middle" font-size="48">📖</text>
+    placeholder = f'''<svg xmlns="http://www.w3.org/2000/svg" width="200" height="260" viewBox="0 0 200 260">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="{color}"/><stop offset="100%" stop-color="{color}" stop-opacity="0.7"/>
+      </linearGradient></defs>
+      <rect width="200" height="260" rx="8" fill="url(#g)"/>
+      <text x="100" y="135" text-anchor="middle" font-size="56">{emoji}</text>
     </svg>'''
     return Response(placeholder, mimetype='image/svg+xml')

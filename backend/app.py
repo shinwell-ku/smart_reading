@@ -3,6 +3,8 @@ AI智慧阅读 - 后端入口
 """
 import os
 import sys
+import socket
+import subprocess
 
 # 确保 backend 目录在路径中
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +31,34 @@ def create_app():
 app = create_app()
 
 
+HOST = '127.0.0.1'
+PORT = 5001
+
+# 全局错误处理器，防止路由异常导致进程退出
+import traceback
+from flask import jsonify
+
+
+@app.errorhandler(Exception)
+def handle_all_exceptions(e):
+    """捕获所有未处理异常，记录日志并返回 500"""
+    traceback.print_exc()
+    return jsonify({"error": f"服务器内部错误: {str(e)}", "code": "INTERNAL_ERROR"}), 500
+
+
 if __name__ == '__main__':
+    # 清理占用端口的残留进程
+    try:
+        import subprocess, time
+        pids = subprocess.check_output(['lsof', '-ti', f'tcp:{PORT}'], text=True).strip().split()
+        for pid in pids:
+            print(f"[启动] 清理残留进程 PID={pid}")
+            subprocess.run(['kill', '-9', pid], capture_output=True)
+        if pids:
+            time.sleep(1)
+    except Exception:
+        pass
+
     init_db()
 
     # 前端静态文件服务（生产构建后）
@@ -48,4 +77,8 @@ if __name__ == '__main__':
     print(f"数据目录: {DATA_DIR}")
     print("=" * 50)
 
-    app.run(host='127.0.0.1', port=5001, threaded=True)
+    try:
+        app.run(host=HOST, port=PORT, threaded=True)
+    except Exception as e:
+        print(f"[错误] 服务异常退出: {e}")
+        traceback.print_exc()

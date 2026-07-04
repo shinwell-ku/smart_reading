@@ -47,6 +47,15 @@ const api = {
     return `${API_BASE}/api/books/${bookId}/cover`;
   },
 
+  async importBookByPath(filePath) {
+    const res = await fetch(`${API_BASE}/api/books/import_by_path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: filePath })
+    });
+    return res.json();
+  },
+
   async getPageContent(bookId, pageNum) {
     const res = await fetch(`${API_BASE}/api/books/${bookId}/page/${pageNum}`);
     return res.json();

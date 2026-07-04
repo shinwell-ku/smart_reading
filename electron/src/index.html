@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:5001 blob:; worker-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://127.0.0.1:5001; font-src 'self' data:; connect-src 'self' http://127.0.0.1:5001 blob:; worker-src 'self' blob:;">
   <title>AI智慧阅读</title>
   <link rel="stylesheet" href="css/main.css">
 </head>
@@ -65,6 +65,7 @@
             <div class="toolbar-spacer"></div>
             <button class="btn-icon" id="btnBookmark" title="添加书签">🔖</button>
             <button class="btn-icon" id="btnFullscreen" title="全屏">⛶</button>
+            <button class="btn-icon" id="btnTogglePanel" title="折叠侧面板">«</button>
           </div>
           <div id="pdfViewer" class="pdf-viewer">
             <div class="empty-state">
@@ -127,6 +128,19 @@
           </div>
           <!-- 笔记面板 -->
           <div class="panel-page" id="panel-notes">
+            <div class="note-input-area">
+              <textarea id="noteContentInput" placeholder="输入笔记内容..." rows="2"></textarea>
+              <div style="display:flex;gap:6px;align-items:center">
+                <div class="color-options" id="noteColors">
+                  <button class="color-btn active" data-color="#FFD700" style="background:#FFD700"></button>
+                  <button class="color-btn" data-color="#FF6B6B" style="background:#FF6B6B"></button>
+                  <button class="color-btn" data-color="#51CF66" style="background:#51CF66"></button>
+                  <button class="color-btn" data-color="#339AF0" style="background:#339AF0"></button>
+                  <button class="color-btn" data-color="#CC66FF" style="background:#CC66FF"></button>
+                </div>
+                <button class="btn btn-primary btn-sm" id="btnAddNote" style="margin-left:auto">添加笔记</button>
+              </div>
+            </div>
             <div id="notesList" class="panel-list"></div>
           </div>
           <!-- 书签面板 -->
@@ -289,6 +303,8 @@
   </div>
 
   <script src="lib/echarts.min.js"></script>
+  <script src="lib/pdfjs/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdfjs/pdf.min.js';</script>
   <script src="js/utils.js"></script>
   <script src="js/api.js"></script>
   <script src="js/library.js"></script>

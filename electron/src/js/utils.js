@@ -140,13 +140,7 @@ const UI = {
       const cancelBtn = $('#btnConfirmCancel');
 
       msgEl.textContent = message;
-      if (danger) {
-        okBtn.className = 'btn btn-danger';
-        okBtn.style.cssText = 'min-width:80px';
-      } else {
-        okBtn.className = 'btn btn-primary';
-        okBtn.style.cssText = 'min-width:80px';
-      }
+      okBtn.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
 
       modal.classList.add('show');
 

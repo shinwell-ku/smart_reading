@@ -22,6 +22,10 @@ echo "=============================="
 echo "   AI智慧阅读 启动中..."
 echo "=============================="
 
+# 清理残留的后端进程
+lsof -ti:5001 | xargs kill -9 2>/dev/null || true
+sleep 1
+
 # 启动 Python 后端
 cd "$DIR/backend"
 .venv/bin/python app.py &

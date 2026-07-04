@@ -101,24 +101,31 @@ const Library = {
     });
   },
 
-  /** 打开书籍阅读 */
+  /** 打开书籍阅读（带防重复点击） */
   async openBook(bookId) {
+    if (this._opening) return;
+    this._opening = true;
     try {
+      // 点击后立即反馈：选中态
+      $$('.book-card').forEach(c => c.classList.remove('selected'));
+      const card = $(`.book-card[data-book-id="${bookId}"]`);
+      if (card) card.classList.add('selected');
+
       const book = await api.getBook(bookId);
       if (book.error) {
         showToast('无法打开书籍: ' + book.error);
+        this._opening = false;
         return;
       }
 
-      // 切换到阅读器视图
-      Reader.open(book);
-      App.switchView('reader');
+      // 打开阅读器（内部会切视图、显示第一页）
+      await Reader.open(book);
 
       // 启用所有功能按钮
       $$('#nav-reader, #nav-translate, #nav-notes, #nav-bookmarks, #nav-search, #nav-knowledge')
         .forEach(b => b.disabled = false);
-      // 默认切到翻译面板
-      App.switchPanel('translate');
+      // 默认切到阅读视图
+      App.switchView('reader');
 
       // 更新进度
       const progress = await api.getProgress(bookId);
@@ -127,14 +134,16 @@ const Library = {
       // 加载侧边图谱
       Knowledge.loadSideGraph(bookId);
 
+      this._opening = false;
     } catch (err) {
+      this._opening = false;
       showToast('打开书籍失败: ' + err.message);
     }
   },
 
   /** 导入书籍（带遮罩防重复） */
   async importBook() {
-    if (this._importing) return;
+    if (this._importing) { showToast('正在导入中，请稍候...'); return; }
     this._importing = true;
 
     const overlay = $('#importOverlay');
@@ -144,7 +153,9 @@ const Library = {
     try {
       btn.disabled = true;
       const result = await window.electronAPI.openFileDialog({});
-      if (result.canceled || !result.filePaths.length) { this._importing = false; btn.disabled = false; return; }
+      if (result.canceled || !result.filePaths.length) {
+        this._importing = false; btn.disabled = false; return;
+      }
 
       overlay.classList.add('show');
       let successCount = 0, failCount = 0;
@@ -154,18 +165,11 @@ const Library = {
         progressText.textContent = `正在导入 ${i + 1}/${result.filePaths.length}...`;
 
         try {
-          const copyResult = await window.electronAPI.copyToBooks(filePath);
-          if (!copyResult.success) { failCount++; continue; }
-
-          const fileData = await window.electronAPI.readFile(copyResult.path);
-          if (!fileData.success) { failCount++; continue; }
-
-          const fileName = copyResult.path.split('/').pop().split('\\').pop();
-          const importResult = await api.importBook(new File([fileData.data], fileName));
-
+          const importResult = await api.importBookByPath(filePath);
           if (importResult.error) { failCount++; }
           else { successCount++; }
-        } catch {
+        } catch (e) {
+          console.error('导入失败:', e);
           failCount++;
         }
       }
@@ -174,15 +178,15 @@ const Library = {
       btn.disabled = false;
       this._importing = false;
 
-      const msg = successCount > 0 ? `✅ 导入成功 ${successCount} 本` : '';
+      const totalMsg = successCount > 0 ? `✅ 导入成功 ${successCount} 本` : '导入完成';
       const failMsg = failCount > 0 ? `，${failCount} 本失败` : '';
-      showToast(msg + failMsg || '导入完成');
+      showToast(totalMsg + failMsg);
       await this.loadBooks();
     } catch (err) {
       overlay.classList.remove('show');
       btn.disabled = false;
       this._importing = false;
-      showToast('导入失败: ' + err.message);
+      showToast('导入失败: ' + (err.message || '未知错误'));
     }
   },
 

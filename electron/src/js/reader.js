@@ -10,48 +10,138 @@ const Reader = {
   notes: [],
   bookmarks: [],
   isEyeCare: false,
+  _pdfDoc: null,
+  _scale: 1.2,
 
   async open(book) {
     this.currentBook = book;
     this.currentPage = 1;
     this.totalPages = book.total_pages || 0;
-    $('#readerTitle').textContent = book.title;
-    await this.loadPages(book.id);
-    await this.loadNotes(book.id);
-    await this.loadBookmarks(book.id);
-    this.renderPage(this.currentPage);
-    this.renderNotesPanel();
-    this.renderBookmarksPanel();
-
-    const progress = await api.getProgress(book.id);
-    if (progress.current_page > 1) {
-      this.currentPage = progress.current_page;
-      this.renderPage(this.currentPage);
-    }
-  },
-
-  async loadPages(bookId) {
-    const viewer = $('#pdfViewer');
-    viewer.innerHTML = '<div class="empty-state"><div class="empty-icon">📖</div><h3>加载中...</h3></div>';
     this.pages = [];
-    try {
-      const page1 = await api.getPageContent(bookId, 1);
-      if (page1.content !== undefined) {
-        this.pages.push(page1.content);
-        this.totalPages = page1.total_pages;
-        for (let i = 2; i <= this.totalPages; i++) {
-          try {
-            const pg = await api.getPageContent(bookId, i);
-            this.pages.push(pg.content);
-          } catch { this.pages.push(''); }
-        }
+    this._pdfDoc = null;
+    $('#readerTitle').textContent = book.title;
+
+    const viewer = $('#pdfViewer');
+
+    // PDF 文件：使用 PDF.js 渲染原始页面
+    if (book.file_type === 'pdf' && book.file_path) {
+      const fileUrl = 'file://' + book.file_path;
+      try {
+        const loadingTask = pdfjsLib.getDocument(fileUrl);
+        this._pdfDoc = await loadingTask.promise;
+        this.totalPages = this._pdfDoc.numPages;
+        await this.renderPage(this.currentPage);
+        App.switchView('reader');
+      } catch (e) {
+        viewer.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>PDF 加载失败</h3><p>${e.message}</p></div>`;
+        App.switchView('reader');
+        return;
       }
-    } catch (err) {
-      viewer.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>加载失败</h3><p>${err.message}</p></div>`;
+    } else {
+      // DOCX 或文本：使用文本渲染
+      await this.loadPage(book.id, 1);
+      this.renderPage(this.currentPage);
+      App.switchView('reader');
+    }
+
+    // 后台加载笔记 + 书签 + 阅读进度
+    this._loadSideData(book.id);
+  },
+
+  /** PDF.js 渲染当前页到 Canvas */
+  async renderPage(pageNum) {
+    const viewer = $('#pdfViewer');
+    if (!this._pdfDoc) {
+      // 没有 PDF 文档时用文本渲染（回退）
+      return this._renderTextPage(pageNum);
+    }
+
+    if (pageNum < 1 || pageNum > this.totalPages) {
+      viewer.innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><h3>无内容</h3></div>';
+      return;
+    }
+
+    try {
+      const page = await this._pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: this._scale });
+
+      // 创建 Canvas
+      const canvas = document.createElement('canvas');
+      canvas.className = 'pdf-canvas';
+      const ctx = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      // 清空并渲染
+      viewer.innerHTML = '';
+      viewer.appendChild(canvas);
+
+      const renderContext = { canvasContext: ctx, viewport: viewport };
+      await page.render(renderContext).promise;
+
+      // 提取文本用于翻译（可选）
+      try {
+        const textContent = await page.getTextContent();
+        this.pages[pageNum - 1] = textContent.items.map(item => item.str).join(' ');
+      } catch { this.pages[pageNum - 1] = ''; }
+
+      // 适配 Canvas 到容器宽度
+      const maxWidth = viewer.clientWidth - 48;
+      if (canvas.width > maxWidth) {
+        const ratio = maxWidth / canvas.width;
+        canvas.style.width = maxWidth + 'px';
+        canvas.style.height = (canvas.height * ratio) + 'px';
+      }
+
+      this.currentPage = pageNum;
+      this.updateUI();
+      this.saveProgress();
+
+      // 自动翻译
+      const mode = document.querySelector('input[name="transMode"]:checked');
+      if (mode && (mode.value === 'auto' || mode.value === 'page')) {
+        this.translateCurrentPage();
+      }
+      // 窗口缩放时自适应
+      this._resizeHandler = () => {
+        const c = viewer.querySelector('canvas');
+        if (!c) return;
+        const maxW = viewer.clientWidth - 48;
+        if (c.width > maxW) {
+          c.style.width = maxW + 'px';
+          c.style.height = (c.height * maxW / c.width) + 'px';
+        } else {
+          c.style.width = '';
+          c.style.height = '';
+        }
+      };
+      window.addEventListener('resize', this._resizeHandler);
+
+      // 滚动翻页：用 wheel 事件处理
+      if (!viewer._wheelHandler) {
+        viewer._wheelHandler = (e) => {
+          if (!this.currentBook) return;
+          const { scrollTop, scrollHeight, clientHeight } = viewer;
+          const atTop = scrollTop <= 0;
+          const atBottom = scrollTop + clientHeight >= scrollHeight - 5;
+          if (e.deltaY > 0 && atBottom && this.currentPage < this.totalPages) {
+            e.preventDefault();
+            this.nextPage();
+          } else if (e.deltaY < 0 && atTop && this.currentPage > 1) {
+            e.preventDefault();
+            this.prevPage();
+          }
+        };
+        viewer.addEventListener('wheel', viewer._wheelHandler, { passive: false });
+      }
+
+    } catch (e) {
+      viewer.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>渲染失败</h3><p>${e.message}</p></div>`;
     }
   },
 
-  renderPage(pageNum) {
+  /** 文本渲染（回退/DOCX） */
+  _renderTextPage(pageNum) {
     const viewer = $('#pdfViewer');
     if (pageNum < 1 || pageNum > this.pages.length) {
       viewer.innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><h3>无内容</h3></div>';
@@ -71,10 +161,44 @@ const Reader = {
     this.updateUI();
     this.saveProgress();
 
-    // 自动翻译模式：翻页后自动翻译当前页
     const mode = document.querySelector('input[name="transMode"]:checked');
     if (mode && (mode.value === 'auto' || mode.value === 'page')) {
       this.translateCurrentPage();
+    }
+  },
+
+  /** 加载指定页（文本模式用） */
+  async loadPage(bookId, pageNum) {
+    try {
+      const pg = await api.getPageContent(bookId, pageNum);
+      if (pg.content !== undefined) {
+        if (pageNum === 1) this.totalPages = pg.total_pages;
+        this.pages[pageNum - 1] = pg.content;
+        return pg.content;
+      }
+    } catch {}
+    this.pages[pageNum - 1] = '';
+  },
+
+  /** 后台加载笔记 + 书签 + 进度 */
+  async _loadSideData(bookId) {
+    try {
+      const [n, b, progress] = await Promise.all([
+        api.getNotes(bookId),
+        api.getBookmarks(bookId),
+        api.getProgress(bookId)
+      ]);
+      this.notes = n.notes || [];
+      this.bookmarks = b.bookmarks || [];
+      this.renderNotesPanel();
+      this.renderBookmarksPanel();
+      if (progress && progress.current_page > 1 && progress.current_page !== this.currentPage) {
+        this.currentPage = progress.current_page;
+        this.goToPage(this.currentPage);
+      }
+    } catch {
+      this.notes = [];
+      this.bookmarks = [];
     }
   },
 
@@ -146,7 +270,7 @@ const Reader = {
     const container = $('#notesList');
     if (!container) return;
     if (!this.notes || this.notes.length === 0) {
-      container.innerHTML = '<div class="hint" style="padding:16px;text-align:center">暂无笔记<br>选中文本后添加笔记</div>';
+      container.innerHTML = '<div class="hint" style="padding:16px;text-align:center">暂无笔记<br>在上方输入内容后点击「添加笔记」</div>';
       return;
     }
     container.innerHTML = this.notes.map(n =>
@@ -203,6 +327,13 @@ const Reader = {
     $('#btnNextPage').addEventListener('click', () => this.nextPage());
     $('#pageSlider').addEventListener('input', e => this.goToPage(parseInt(e.target.value)));
     $('#btnBookmark').addEventListener('click', () => this.toggleBookmark());
+    $('#btnTogglePanel').addEventListener('click', () => {
+      const panel = $('#sidePanel');
+      const left = $('.split-left');
+      panel.classList.toggle('collapsed');
+      left.classList.toggle('expanded');
+      $('#btnTogglePanel').textContent = panel.classList.contains('collapsed') ? '»' : '«';
+    });
     $('#btnFullscreen').addEventListener('click', () => {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen();
       else document.exitFullscreen();
@@ -237,6 +368,67 @@ const Reader = {
           $('#sideSourceText').placeholder = '在左侧选中文本，或输入要翻译的文字...';
         }
       });
+    });
+
+    // 笔记：添加按钮
+    $('#btnAddNote').addEventListener('click', () => {
+      if (!this.currentBook) { showToast('请先打开一本书'); return; }
+      const content = $('#noteContentInput').value.trim();
+      if (!content) { showToast('请输入笔记内容'); return; }
+      const color = $('#noteColors .active')?.dataset.color || '#FFD700';
+      this.addNote(this.currentPage, '', content, color);
+      $('#noteContentInput').value = '';
+    });
+
+    // 笔记：颜色选择
+    $$('#noteColors .color-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('#noteColors .color-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // 缩放手势（Ctrl+滚轮 / Mac 触控板捏合）
+    $('#pdfViewer').addEventListener('wheel', (e) => {
+      if (!this.currentBook) return;
+      // Mac 捏合缩放或 Ctrl+滚轮缩放
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -1 : 1;
+        const current = parseInt($('#fontSize')?.value || '16');
+        const next = Math.max(10, Math.min(36, current + delta));
+        $('#fontSize').value = next;
+        $('#fontSizeLabel').textContent = next + 'px';
+        document.querySelectorAll('.pdf-page').forEach(el => el.style.fontSize = next + 'px');
+        localStorage.setItem('sr_fontSize', String(next));
+        return;
+      }
+      // 普通滚轮翻页
+      const { scrollTop, scrollHeight, clientHeight } = $('#pdfViewer');
+      const atTop = scrollTop <= 0;
+      const atBottom = scrollTop + clientHeight >= scrollHeight - 5;
+      if (e.deltaY > 0 && atBottom && this.currentPage < this.totalPages) {
+        e.preventDefault();
+        this.nextPage();
+      } else if (e.deltaY < 0 && atTop && this.currentPage > 1) {
+        e.preventDefault();
+        this.prevPage();
+      }
+    }, { passive: false });
+
+    // Ctrl+= / Ctrl+- 缩放快捷键
+    document.addEventListener('keydown', (e) => {
+      if (!this.currentBook) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+' || e.key === '-')) {
+        e.preventDefault();
+        const delta = (e.key === '-' || e.key === '-') ? -1 : 1;
+        const current = parseInt($('#fontSize')?.value || '16');
+        const next = Math.max(10, Math.min(36, current + delta));
+        $('#fontSize').value = next;
+        $('#fontSizeLabel').textContent = next + 'px';
+        document.querySelectorAll('.pdf-page').forEach(el => el.style.fontSize = next + 'px');
+        localStorage.setItem('sr_fontSize', String(next));
+      }
     });
 
     // 键盘翻页

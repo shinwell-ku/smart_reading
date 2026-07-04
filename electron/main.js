@@ -2,7 +2,7 @@
  * AI智慧阅读 - Electron 主进程
  * 负责窗口管理、本地文件访问、Python后端生命周期管理
  */
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -62,6 +62,11 @@ function getPythonCommand() {
 
 function startPythonBackend() {
   return new Promise((resolve, reject) => {
+    // 先清理上次残留的 Python 后端进程
+    try {
+      require('child_process').execSync('lsof -ti:5001 | xargs kill -9 2>/dev/null; sleep 1', { timeout: 3000 });
+    } catch (e) { /* ok */ }
+
     const pythonCmd = getPythonCommand();
     const appPy = path.join(BACKEND_DIR, 'app.py');
 
@@ -112,6 +117,12 @@ function startPythonBackend() {
       if (!started) {
         started = true;
         resolve();
+      } else {
+        // 意外退出，3 秒后自动重启
+        console.log('[主进程] Python 后端意外退出，3 秒后自动重启...');
+        setTimeout(() => {
+          startPythonBackend().catch(e => console.error('[主进程] 重启失败:', e));
+        }, 3000);
       }
     });
 
@@ -281,6 +292,9 @@ ipcMain.handle('file:copyToBooks', async (event, sourcePath) => {
 // ============================================================
 
 app.whenReady().then(async () => {
+  // 移除默认菜单栏
+  Menu.setApplicationMenu(null);
+
   // 启动 Python 后端
   try {
     await startPythonBackend();
