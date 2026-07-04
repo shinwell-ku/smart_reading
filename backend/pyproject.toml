@@ -1,0 +1,36 @@
+[project]
+name = "smart-reading"
+version = "1.0.0"
+description = "AI智慧阅读 - 纯本地离线 Python 后端服务"
+requires-python = ">=3.9,<3.14"
+
+dependencies = [
+    # Web 框架
+    "flask>=2.3.0",
+    "flask-cors>=4.0.0",
+    # 文档解析
+    "PyMuPDF>=1.21.0",          # PDF 解析 (import fitz)
+    "python-docx>=0.8.11",      # DOCX 解析
+    "Pillow>=9.0.0",            # 图片处理
+    # AI / NLP
+    "numpy>=1.24.0,<2.0.0",     # 数值计算（与 torch 兼容）
+    "transformers<4.49",  # HuggingFace 模型加载（与 torch 2.2 兼容）
+    "torch>=2.0.0",             # 深度学习框架
+    "sentencepiece>=0.1.99",    # 分词器
+    # 语言工具
+    "langdetect>=1.0.9",        # 语言检测
+    "jieba>=0.42.1",            # 中文分词
+    "opencc-python-reimplemented>=0.1.7",  # 简繁转换
+    # ORM + Schemas
+    "sqlalchemy>=2.0",
+    "pydantic>=2.0",
+    # OCR 扫描识别
+    "paddlepaddle>=2.6.0",
+    "paddleocr>=2.7.0",
+]
+
+[tool.uv]
+package = false
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]

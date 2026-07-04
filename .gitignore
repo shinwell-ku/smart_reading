@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+backend/.venv/
+backend/venv/
+*.db
+*.db-wal
+*.db-shm
+
+# Node
+node_modules/
+electron/node_modules/
+
+# Build output
+electron/dist/
+electron/build-resources/
+electron/src/lib/echarts.min.js
+electron/build/resources/logo_topbar.png
+
+# Data files
+data/books/*
+data/exports/*
+data/cache/*
+data/models/*
+data/db/*
+!data/books/.gitkeep
+!data/exports/.gitkeep
+!data/cache/.gitkeep
+!data/models/.gitkeep
+!data/db/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

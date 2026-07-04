@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:5001 blob:; worker-src 'self' blob:;">
+  <title>AI智慧阅读</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ==================== 顶部导航栏 ==================== -->
+    <header id="topbar">
+      <div class="topbar-brand"><img src="assets/logo.png" class="brand-logo" alt="AI智慧阅读" /> AI</div>
+      <nav class="topbar-nav">
+        <button class="topbar-btn active" data-view="library">📚 书库</button>
+        <button class="topbar-btn" data-view="reader" id="nav-reader" disabled>📖 阅读</button>
+        <button class="topbar-btn panel-trigger" data-panel="translate" id="nav-translate" disabled>🌐 翻译</button>
+        <button class="topbar-btn panel-trigger" data-panel="notes" id="nav-notes" disabled>📝 笔记</button>
+        <button class="topbar-btn panel-trigger" data-panel="bookmarks" id="nav-bookmarks" disabled>🔖 书签</button>
+        <button class="topbar-btn panel-trigger" data-panel="search" id="nav-search" disabled>🔍 搜索</button>
+        <button class="topbar-btn panel-trigger" data-panel="knowledge" id="nav-knowledge" disabled>🧠 图谱</button>
+        <button class="topbar-btn" data-view="settings">⚙️ 设置</button>
+        <button class="topbar-btn" data-view="about">ℹ️ 关于</button>
+      </nav>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-status" id="backendStatus">
+        <span class="status-dot offline"></span>
+        <span class="status-text">服务离线</span>
+      </div>
+    </header>
+
+    <!-- ==================== 主体区域 ==================== -->
+    <main id="main-content">
+
+      <!-- ─── 书库视图（全宽） ─── -->
+      <section id="view-library" class="view view-full active">
+        <div class="view-header">
+          <h2>我的书库</h2>
+          <div class="view-actions">
+            <div class="search-box">
+              <input type="text" id="librarySearch" placeholder="搜索书籍..." />
+            </div>
+            <button class="btn btn-primary" id="btnImportBook">📥 导入书籍</button>
+          </div>
+        </div>
+        <div id="bookGrid" class="book-grid">
+          <div class="empty-state">
+            <div class="empty-icon">📚</div>
+            <h3>书库为空</h3>
+            <p>点击「导入书籍」按钮添加您的第一本电子书</p>
+            <p class="hint">支持 PDF、DOCX 格式</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── 阅读器视图（左右分栏） ─── -->
+      <section id="view-reader" class="view view-split">
+        <!-- 左侧：始终显示原始文档 -->
+        <div class="split-left">
+          <div class="reader-toolbar">
+            <button class="btn-icon" id="btnBackToLib" title="返回书库">←</button>
+            <span id="readerTitle" class="reader-title">未选择书籍</span>
+            <div class="toolbar-spacer"></div>
+            <button class="btn-icon" id="btnBookmark" title="添加书签">🔖</button>
+            <button class="btn-icon" id="btnFullscreen" title="全屏">⛶</button>
+          </div>
+          <div id="pdfViewer" class="pdf-viewer">
+            <div class="empty-state">
+              <div class="empty-icon">📖</div>
+              <h3>选择书籍开始阅读</h3>
+              <p>从书库中选择一本书</p>
+            </div>
+          </div>
+          <div class="reader-footer">
+            <button class="btn-icon" id="btnPrevPage" title="上一页">◀</button>
+            <span id="pageInfo">第 0/0 页</span>
+            <input type="range" id="pageSlider" min="1" max="1" value="1" />
+            <button class="btn-icon" id="btnNextPage" title="下一页">▶</button>
+            <div class="progress-info">
+              <span id="progressPercent">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧：功能面板，由顶部导航控制 -->
+        <div class="split-right" id="sidePanel">
+          <!-- 翻译面板 -->
+          <div class="panel-page active" id="panel-translate">
+            <div class="inline-translate">
+              <div class="translate-mode">
+                <label class="mode-option active">
+                  <input type="radio" name="transMode" value="manual" checked />
+                  <span>划词</span>
+                </label>
+                <label class="mode-option">
+                  <input type="radio" name="transMode" value="page" />
+                  <span>当前页</span>
+                </label>
+                <label class="mode-option">
+                  <input type="radio" name="transMode" value="auto" />
+                  <span>自动</span>
+                </label>
+                <button class="btn btn-secondary btn-sm" id="btnFullTranslateSide" style="margin-left:auto">全文</button>
+              </div>
+              <div class="lang-selector">
+                <select id="sideSourceLang">
+                  <option value="auto">自动</option>
+                  <option value="zh">中文</option>
+                  <option value="en">English</option>
+                  <option value="ja">日本語</option>
+                  <option value="ko">한국어</option>
+                </select>
+                <button class="btn-icon btn-sm" id="btnSideSwapLang">⇄</button>
+                <select id="sideTargetLang">
+                  <option value="zh" selected>中文</option>
+                  <option value="en">English</option>
+                  <option value="ja">日本語</option>
+                  <option value="ko">한국어</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="btnSideTranslate">翻译</button>
+              </div>
+              <textarea id="sideSourceText" placeholder="在左侧选中文本，或切换「当前页」「自动」模式..." rows="2" readonly></textarea>
+              <div id="sideTranslateResult" class="translation-result">等待翻译...</div>
+            </div>
+          </div>
+          <!-- 笔记面板 -->
+          <div class="panel-page" id="panel-notes">
+            <div id="notesList" class="panel-list"></div>
+          </div>
+          <!-- 书签面板 -->
+          <div class="panel-page" id="panel-bookmarks">
+            <div id="bookmarksList" class="panel-list"></div>
+          </div>
+          <!-- 搜索面板 -->
+          <div class="panel-page" id="panel-search">
+            <div class="search-panel">
+              <input type="text" id="sideSearchInput" placeholder="输入关键词搜索全书..." />
+              <button class="btn btn-primary btn-sm" id="btnSideSearch">搜索</button>
+            </div>
+            <div id="sideSearchResults" class="panel-list"></div>
+          </div>
+          <!-- 图谱面板 -->
+          <div class="panel-page" id="panel-knowledge">
+            <div class="graph-placeholder">
+              <div id="sideGraphContainer" style="width:100%;height:280px"></div>
+              <div id="sideNodeDetail" class="node-detail-sm"></div>
+              <div class="graph-actions">
+                <button class="btn btn-primary btn-sm" id="btnSideExtract">🔄 生成图谱</button>
+                <button class="btn btn-secondary btn-sm" id="btnSideExport">📤 导出</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── 设置视图（全宽） ─── -->
+      <section id="view-settings" class="view view-full">
+        <div class="view-header">
+          <h2>⚙️ 设置</h2>
+        </div>
+        <div class="settings-container">
+          <div class="settings-section">
+            <h3>阅读设置</h3>
+            <div class="setting-item">
+              <label>字体大小</label>
+              <input type="range" id="fontSize" min="12" max="32" value="16" />
+              <span id="fontSizeLabel">16px</span>
+            </div>
+            <div class="setting-item">
+              <label>行间距</label>
+              <select id="lineSpacing">
+                <option value="1.0">紧凑</option>
+                <option value="1.5" selected>正常</option>
+                <option value="2.0">宽松</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label>护眼模式</label>
+              <label class="switch">
+                <input type="checkbox" id="eyeCare" />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h3>数据管理</h3>
+            <div class="setting-item">
+              <label>备份数据</label>
+              <button class="btn btn-secondary" id="btnBackup">创建备份</button>
+            </div>
+            <div class="setting-item">
+              <label>重置数据</label>
+              <button class="btn btn-danger" id="btnResetData">清除所有数据</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── 关于视图（全宽） ─── -->
+      <section id="view-about" class="view view-full">
+        <div class="view-header">
+          <h2>ℹ️ 关于</h2>
+        </div>
+        <div class="settings-container" style="text-align:center;padding-top:40px">
+          <div style="font-size:48px;margin-bottom:12px">📚</div>
+          <p style="font-size:18px;font-weight:600;margin-bottom:4px">AI智慧阅读</p>
+          <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">v1.0.0</p>
+          <p style="font-size:13px;color:var(--text-dim);margin-bottom:4px">作者：Shinwell</p>
+          <p style="font-size:13px;color:var(--text-dim);margin-bottom:4px">纯本地离线 AI 阅读软件，所有数据不出本地</p>
+          <p style="font-size:13px;color:var(--accent);font-weight:500;margin-bottom:20px">用心做好安全、高效、易用的每一个小工具</p>
+          <div style="border-top:1px solid var(--border);padding-top:20px;margin-bottom:16px">
+            <p style="font-size:13px;color:var(--text-dim);margin-bottom:8px">
+              开源不易，用得好、对您有价值，希望得到您的捐助 🙏
+            </p>
+            <div class="donation-qr">
+              <img src="assets/wechat_pay.png" alt="微信赞赏" onerror="this.style.display='none'" />
+              <span class="qr-label">微信赞赏码</span>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:var(--text-muted)">
+              您的支持是我继续前进的动力 🙏<br>
+              欢迎提供好的建议或赞助支持
+            </p>
+          </div>
+          <p style="font-size:12px;color:var(--accent);margin-top:8px">kuxiangwei@163.com</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================== 导入进度遮罩 ==================== -->
+  <div id="importOverlay" class="overlay hidden">
+    <div class="overlay-content">
+      <div class="overlay-spinner"></div>
+      <div id="importProgressText">正在导入...</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="noteModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加笔记</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="noteSelectedText" class="selected-text-display"></div>
+        <textarea id="noteContent" placeholder="输入笔记内容..." rows="5"></textarea>
+        <div class="color-picker">
+          <label>标签颜色：</label>
+          <div class="color-options">
+            <button class="color-btn active" data-color="#FFD700" style="background:#FFD700"></button>
+            <button class="color-btn" data-color="#FF6B6B" style="background:#FF6B6B"></button>
+            <button class="color-btn" data-color="#51CF66" style="background:#51CF66"></button>
+            <button class="color-btn" data-color="#339AF0" style="background:#339AF0"></button>
+            <button class="color-btn" data-color="#CC66FF" style="background:#CC66FF"></button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancelNote">取消</button>
+        <button class="btn btn-primary" id="btnSaveNote">保存笔记</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="lib/echarts.min.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/reader.js"></script>
+  <script src="js/translation.js"></script>
+  <script src="js/knowledge.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

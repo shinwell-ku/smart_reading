@@ -1,0 +1,65 @@
+#!/bin/bash
+# ============================================================
+# AI智慧阅读 - 生产包构建脚本
+# 将后端 Python 环境 + AI 模型 + 数据打包进 Electron 安装包
+# ============================================================
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RES_DIR="$DIR/electron/build-resources"
+BACKEND_SRC="$DIR/backend"
+DATA_SRC="$DIR/data"
+
+echo "=============================="
+echo "  构建 AI智慧阅读 安装包"
+echo "=============================="
+
+# 清理
+rm -rf "$RES_DIR"
+mkdir -p "$RES_DIR/backend" "$RES_DIR/data"
+
+echo "[1/5] 复制后端代码..."
+rsync -a --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc' \
+  --exclude='.python-version' --exclude='*.db*' \
+  "$BACKEND_SRC/" "$RES_DIR/backend/"
+
+echo "[2/5] 复制 Python 虚拟环境（包含符号链接）..."
+cp -rL "$BACKEND_SRC/.venv" "$RES_DIR/backend/.venv" 2>/dev/null || rsync -a --copy-links \
+  --exclude='__pycache__' --exclude='*.pyc' \
+  "$BACKEND_SRC/.venv/" "$RES_DIR/backend/.venv/"
+find "$RES_DIR/backend/.venv" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+find "$RES_DIR/backend/.venv" -name '*.pyc' -delete
+rm -rf "$RES_DIR/backend/.venv/share" 2>/dev/null || true
+# 修正 venv 中的路径引用
+VENV_PYTHON="$RES_DIR/backend/.venv/bin/python3"
+[ ! -f "$VENV_PYTHON" ] && [ -f "$RES_DIR/backend/.venv/bin/python" ] && \
+  ln -sf python "$VENV_PYTHON"
+
+echo "[3/5] 复制 AI 模型..."
+if [ -d "$DATA_SRC/models" ] && [ "$(ls -A "$DATA_SRC/models" 2>/dev/null)" ]; then
+  rsync -a "$DATA_SRC/models/" "$RES_DIR/data/models/"
+  echo "  模型已打包"
+else
+  mkdir -p "$RES_DIR/data/models"
+  echo "  无模型，跳过"
+fi
+
+echo "[4/5] 创建数据目录..."
+for d in db books cache exports; do mkdir -p "$RES_DIR/data/$d"; done
+
+echo "[5/5] 构建 Electron 安装包..."
+cd "$DIR/electron"
+
+case "$1" in
+  win) npx electron-builder --win --config build/electron-builder.json ;;
+  mac) npx electron-builder --mac --config build/electron-builder.json ;;
+  all) npx electron-builder --win --mac --config build/electron-builder.json ;;
+  "")  npx electron-builder --win --mac --config build/electron-builder.json ;;
+  *) echo "用法: $0 [win|mac|all]"; exit 1 ;;
+esac
+
+# 构建完成后清理 build-resources
+rm -rf "$RES_DIR"
+
+echo ""
+echo "✅ 构建完成！安装包位于: electron/dist/"
+echo "=============================="

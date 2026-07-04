@@ -1,0 +1,48 @@
+{
+  "appId": "com.smartreading.ai",
+  "productName": "AI智慧阅读",
+  "directories": {
+    "output": "dist",
+    "buildResources": "resources"
+  },
+  "files": [
+    "**/*",
+    "!build-resources/**"
+  ],
+  "extraResources": [
+    {
+      "from": "build-resources/backend",
+      "to": "backend"
+    },
+    {
+      "from": "build-resources/data",
+      "to": "data"
+    }
+  ],
+  "win": {
+    "target": ["nsis"],
+    "icon": "build/resources/icon.ico",
+    "artifactName": "${productName}-Setup-${version}.${ext}"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "icon": "build/resources/icon.icns",
+    "artifactName": "${productName}-${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerLanguages": ["zh_CN", "en_US"],
+    "shortcutName": "AI智慧阅读",
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  },
+  "dmg": {
+    "title": "AI智慧阅读 ${version}",
+    "contents": [
+      {"x": 130, "y": 220, "type": "file"},
+      {"x": 410, "y": 220, "type": "link", "path": "/Applications"}
+    ]
+  },
+  "publish": null
+}
