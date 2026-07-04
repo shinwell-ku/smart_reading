@@ -8,34 +8,37 @@ AI智慧阅读 — 纯本地离线 AI 智能阅读软件。四层架构：Electr
 
 后端采用 **MVC 三层**：Controller (routes/) → Service (services/) → Model (models/ + schemas/)
 
-Tech: **Electron 28** / **PDF.js** / **ECharts 5** / **Flask 3.0** / **SQLAlchemy 2.0** / **Pydantic 2** / **PyMuPDF** / **PyTorch 2.2** (CPU) / **Transformers 4** / **PaddleOCR** / **SQLite** (WAL)
+前端采用 **React 18 + Ant Design 5 + react-pdf**
+
+Tech: **Electron 28** / **react-pdf** / **ECharts 5** / **Ant Design 5** / **Flask 3.0** / **SQLAlchemy 2.0** / **Pydantic 2** / **PyMuPDF** / **PyTorch 2.2** (CPU) / **Transformers 4** / **PaddleOCR** / **SQLite** (WAL)
 
 ## Key Commands
 
 ### Backend (Python / uv)
 ```bash
 cd backend
-uv sync                          # 安装全部依赖（含 OCR）
-uv sync --extra dev              # 含开发工具
+uv sync                          # 安装全部依赖
 uv run python app.py             # 启动后端 → http://127.0.0.1:5001
 uv run python -c "..."           # 在 venv 中运行任意 Python
 uv add <pkg>                     # 添加依赖
-uv add --dev <pkg>               # 添加开发依赖
 uv lock                          # 锁定版本
-uv run python scripts/download_models.py --list                 # 查看 AI 模型状态
-uv run python scripts/download_models.py nllb200_4bit --mirror  # 下载翻译模型
-uv run python scripts/download_models.py --all --mirror         # 下载全部模型
+uv run python ../scripts/download_models.py --list            # 查看 AI 模型状态
+uv run python ../scripts/download_models.py nllb200_4bit --mirror  # 下载翻译模型
 ```
 
-### Frontend (Vue + Vite)
+### Frontend (React + Vite)
 ```bash
 cd frontend
 npm install                      # 安装依赖
-npm start                        # 启动应用（自动编译 + 启动 Electron）
-npm run dev                      # 开发模式（带 DevTools）
+npm start                        # 编译 + 启动 Electron
 npm run build:vue                # 仅编译前端
-npm run build:win                # 打包 Windows 安装包
-npm run build:mac                # 打包 macOS DMG
+npm run build:win                # 打包 Windows
+npm run build:mac                # 打包 macOS
+```
+
+### Start Everything
+```bash
+./start.sh                       # 一键启动后端 + 前端
 ```
 
 ## Architecture
@@ -61,19 +64,32 @@ backend/
 └── services/        # 业务逻辑
 ```
 
-### Backend Service Modules (`backend/services/`)
-- `document_parser.py` — PDF (PyMuPDF) / DOCX (python-docx) 解析，章节识别，分页
-- `translator.py` — 离线翻译，优先加载 `data/models/nllb200_4bit`，无模型时静默回退
-- `knowledge_extractor.py` — 规则+NLP混合知识抽取，加载 `data/models/bert4cls_small`（可选）
-- `ocr_service.py` — PaddleOCR，扫描版PDF识别
+### Frontend Structure
+```
+frontend/
+├── main.js              # Electron 主进程
+├── preload.js           # 安全桥接
+├── src/                 # React 源码
+│   ├── main.jsx         # React 入口
+│   ├── App.jsx          # 根组件（布局 + 导航）
+│   ├── App.css          # 全局样式
+│   ├── api.js           # HTTP API 客户端
+│   ├── pages/           # 页面组件
+│   │   ├── Library.jsx  # 书库
+│   │   ├── Reader.jsx   # PDF 阅读器（react-pdf）
+│   │   ├── Settings.jsx # 设置
+│   │   └── About.jsx    # 关于
+│   └── components/
+│       └── SidePanel.jsx # 翻译/笔记/书签/图谱侧面板
+├── dist_vue/            # Vite 构建产物
+└── vite.config.js       # Vite 配置
+```
 
-### Frontend Modules (`frontend/src/js/`)
-- `app.js` — 主控制器：导航切换、后端心跳检查、设置面板
-- `api.js` — 纯 HTTP 客户端（fetch → http://127.0.0.1:5001/api/...）
-- `library.js` — 书库：书籍列表、导入、搜索、删除
-- `reader.js` — 阅读器：PDF分页渲染、翻页、笔记、书签、阅读设置
-- `translation.js` — 翻译界面：划词/全文翻译、语言切换、历史
-- `knowledge.js` — ECharts 力导向图谱渲染、节点交互、大纲导出
+### Backend Service Modules
+- `document_parser.py` — PDF (PyMuPDF) / DOCX (python-docx) 解析，章节识别
+- `translator.py` — 离线翻译，优先加载 `data/models/nllb200_4bit`，无模型时静默回退
+- `knowledge_extractor.py` — 规则+NLP混合知识抽取
+- `ocr_service.py` — PaddleOCR，扫描版PDF识别
 
 ### Database (SQLite WAL mode)
 8 tables: `books`, `reading_progress`, `notes`, `bookmarks`, `translation_records`, `vocabulary`, `knowledge_nodes`, `knowledge_edges`
@@ -81,39 +97,40 @@ backend/
 ### Data Directory Layout
 ```
 data/
-├── db/          # SQLite 数据库 (database.db)
+├── db/          # SQLite 数据库
 ├── books/       # 原始 PDF/DOCX
 ├── exports/     # 备份包、大纲导出
-├── cache/       # 分页文本、翻译结果、图谱 JSON（按 book_id 命名）
-└── models/      # AI 模型权重（nllb200_4bit/, bert4cls_small/）
+├── cache/       # 分页文本、翻译结果、图谱 JSON
+└── models/      # AI 模型权重
 ```
 
 ## AI Models
 
 | Model | What it does | Fallback without it |
 |-------|-------------|---------------------|
-| **NLLB-200** (`data/models/nllb200_4bit/`) | 200-language translation via `translator.py` | Rule-based translation (basic EN/CN only) |
-| **BERT** (`data/models/bert4cls_small/`) | Chinese knowledge extraction via `knowledge_extractor.py` | Regex-based extraction (lower accuracy) |
+| **NLLB-200** | 200-language translation | Rule-based translation (basic EN/CN only) |
+| **BERT** | Chinese knowledge extraction | Regex-based extraction (lower accuracy) |
 
 Both are **optional** — the app degrades gracefully without them.
 
 ## Key Patterns
 
-- **零网络策略**: 所有 `transformers` / `AutoModel` 加载必须用 `local_files_only=True`，禁用 HuggingFace 自动下载。translator.py 和 knowledge_extractor.py 在无本地模型时静默回退。
-- **后台任务**: 全文翻译 / 知识抽取用 `threading.Thread(daemon=True)` 异步执行，前端轮询状态。
-- **IPC 权限**: 渲染进程通过 `preload.js` 的 `contextBridge` 暴露有限 API，不持有 `nodeIntegration` 权限。
-- **后端进程管理**: `main.js` 的 `startPythonBackend()` 自动检测 `python3` 命令，解析 stdout 中 "启动" 关键字确认服务就绪。
+- **零网络策略**: 所有 `transformers` / `AutoModel` 加载必须用 `local_files_only=True`
+- **后台任务**: 全文翻译 / 知识抽取用 `threading.Thread(daemon=True)` 异步执行
+- **IPC 权限**: 渲染进程通过 `preload.js` 的 `contextBridge` 暴露有限 API
+- **后端进程管理**: `startPythonBackend()` 自动检测 `python3` 命令
+- **后端自动重启**: 进程意外退出后 3 秒自动拉起
+- **PDF 文字选中**: react-pdf text layer + `window.getSelection()` → 自动填充翻译
 
 ## Critical Constraints
 
-- **Python 3.10** (uv .python-version) — paddlepaddle/paddleocr 需要此版本且同时兼容 macOS x86_64 wheel
-- **`torch` 锁定 2.2.x** — Python 3.10 + macOS x86_64 能获取到的最高 torch 版本
+- **Python 3.10** — paddlepaddle/paddleocr 需要此版本
+- **`torch` 锁定 2.2.x** — Python 3.10 + macOS x86_64 最高版本
 - **`transformers < 5.0`** — 与 torch 2.2 兼容
 - **`numpy < 2.0`** — torch 2.2 要求 numpy 1.x
-- **`tool.uv.required-environments`** 配置在 `pyproject.toml` 中，确保 uv 能正确解析 macOS x86_64 的 wheel
 
 ## Quality Notes
 
-- 翻译模型未下载时自动回退规则翻译，不抛异常
-- 知识抽取模型未下载时使用纯正则规则，结果可用但精度较低
-- PaddleOCR 首次加载会编译 CUDA 相关代码（即使 CPU only），耗时约 30-60s，属正常行为
+- 翻译模型未下载时自动回退规则翻译
+- 知识抽取模型未下载时使用纯正则规则
+- PaddleOCR 首次加载耗时约 30-60s

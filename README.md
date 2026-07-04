@@ -147,15 +147,19 @@ smart_reading/
 │   ├── routes/                # 控制器（8 个模块）
 │   ├── services/              # 业务逻辑（解析/翻译/知识/OCR）
 │   └── pyproject.toml         # 依赖管理（uv）
-├── frontend/                   # 前端
-│   ├── main.js                # 主进程
+├── frontend/                   # 前端（React + Vite）
+│   ├── main.js                # Electron 主进程
 │   ├── preload.js             # 安全桥接
-│   ├── package.json
-│   └── src/
-│       ├── index.html         # 单页应用（6 视图）
-│       ├── css/               # 5 个模块化样式
-│       ├── js/                # 7 个前端模块
-│       └── lib/               # 离线库（ECharts 等）
+│   ├── index.html             # Vite 入口
+│   ├── vite.config.js         # 构建配置
+│   ├── src/                   # React 源码
+│   │   ├── main.jsx           # React 入口
+│   │   ├── App.jsx            # 根组件
+│   │   ├── App.css            # 全局样式
+│   │   ├── api.js             # API 客户端
+│   │   ├── pages/             # 页面组件
+│   │   └── components/        # 组件
+│   └── dist_vue/              # 构建产物
 ├── data/                      # 本地数据
 │   ├── db/                    # SQLite 数据库
 │   ├── books/                 # 书籍文件
@@ -176,7 +180,9 @@ smart_reading/
 | 层级 | 技术 | 说明 |
 |------|------|------|
 | 桌面框架 | Electron 28+ | 跨平台桌面应用 |
-| 前端渲染 | PDF.js + ECharts 5 | PDF渲染 + 力导向图谱 |
+| 前端框架 | React 18 + Ant Design 5 | 组件化 UI |
+| PDF 渲染 | react-pdf | 文字选中、缩放原生支持 |
+| 图谱可视化 | ECharts 5 | 力导向知识图谱 |
 | 后端框架 | Flask 3.0 | 轻量 REST API |
 | 数据库 | SQLite (WAL 模式) | 本地结构化存储 |
 | 包管理 | uv (Python) / npm (Node.js) | 依赖管理 |

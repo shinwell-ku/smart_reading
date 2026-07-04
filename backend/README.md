@@ -103,3 +103,9 @@ backend/
 ## 端口
 
 - `127.0.0.1:5001`（仅本地回环）
+
+## 数据库
+
+- SQLite WAL 模式，8 张表
+- 连接池：pool_size=20, max_overflow=40
+- 文件位置：`../data/db/database.db`
