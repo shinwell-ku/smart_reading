@@ -40,6 +40,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [graphData, setGraphData] = useState(null)
   const [graphLayout, setGraphLayout] = useState('force')
   const [graphLabels, setGraphLabels] = useState('auto')
+  const [graphEdges, setGraphEdges] = useState('all')
+  const [graphRepulsion, setGraphRepulsion] = useState(400)
   const graphRef = useRef(null)
   const chartRef = useRef(null)
   const resizeObserverRef = useRef(null)
@@ -116,10 +118,21 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     setNotes(r.notes || [])
   }
 
-  const renderGraph = (data, layout, labels) => {
+  const renderGraph = (data, layout, labels, edges, repulsion) => {
     if (!data || !graphRef.current) return
+
+    // 布局映射
+    const echartsLayout = layout === 'radial' ? 'force' : layout
     const showLabel = labels === 'all' ? true : labels === 'none' ? false : undefined
-    const repulsion = layout === 'circular' ? 0 : 400
+    const r = layout === 'circular' ? 0 : layout === 'radial' ? repulsion * 0.5 : repulsion
+
+    // 边过滤
+    const filteredEdges = data.edges.filter(e => {
+      if (edges === 'all') return true
+      if (edges === 'hierarchy') return e.type === 'hierarchy'
+      if (edges === 'relation') return e.type !== 'hierarchy'
+      return true
+    })
 
     if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null }
     if (resizeObserverRef.current) { resizeObserverRef.current.disconnect(); resizeObserverRef.current = null }
@@ -139,7 +152,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
           },
           series: [{
             type: 'graph',
-            layout: layout,
+            layout: echartsLayout,
             roam: true, draggable: true,
             circular: layout === 'circular' ? { rotateLabel: true } : undefined,
             data: data.nodes.map(n => ({
@@ -152,7 +165,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               label: { show: showLabel !== undefined ? showLabel : n.level <= 2, fontSize: 11, fontWeight: n.level <= 1 ? 600 : 400 },
               description: n.description,
             })),
-            edges: data.edges.map(e => ({
+            edges: filteredEdges.map(e => ({
               source: e.source, target: e.target,
               label: { show: showLabel !== undefined ? showLabel : true, formatter: e.label || '', fontSize: 9, color: '#909399' },
               lineStyle: {
@@ -162,7 +175,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 type: e.type === 'hierarchy' ? 'solid' : 'dashed',
               },
             })),
-            force: { repulsion, edgeLength: [80, 200], gravity: 0.05 },
+            force: { repulsion: r, edgeLength: [80, 200], gravity: layout === 'radial' ? 0.15 : 0.05 },
             label: { show: showLabel !== undefined ? showLabel : true, position: 'right', fontSize: 10, color: '#303133' },
             lineStyle: { color: '#e0e0e0' },
             emphasis: { focus: 'adjacency', lineStyle: { width: 2 } },
@@ -185,14 +198,14 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       }
       setGraphExists(true)
       setGraphData(data)
-      renderGraph(data, graphLayout, graphLabels)
+      renderGraph(data, graphLayout, graphLabels, graphEdges, graphRepulsion)
     } catch (e) { console.error('[图谱] 加载失败:', e) }
   }
 
-  // 布局/标签切换时重新渲染
+  // 布局/标签/边/斥力切换时重新渲染
   useEffect(() => {
-    if (graphData) renderGraph(graphData, graphLayout, graphLabels)
-  }, [graphLayout, graphLabels])
+    if (graphData) renderGraph(graphData, graphLayout, graphLabels, graphEdges, graphRepulsion)
+  }, [graphLayout, graphLabels, graphEdges, graphRepulsion])
 
   // Language options
   const langOpts = [
@@ -281,21 +294,37 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         {activeTab === 'knowledge' && (
           <div className="panel-body" style={{ flex: 1 }}>
             {graphExists && (
-              <div style={{ display: 'flex', gap: 6, paddingBottom: 6, flexShrink: 0 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, paddingBottom: 6, flexShrink: 0 }}>
                 <Select size="small" value={graphLayout} onChange={setGraphLayout}
-                  style={{ width: 100 }}
+                  style={{ width: 88 }}
                   options={[
                     { value: 'force', label: '力导向' },
                     { value: 'circular', label: '环形' },
-                    { value: 'tree', label: '树形' },
+                    { value: 'radial', label: '辐射' },
                   ]} />
                 <Select size="small" value={graphLabels} onChange={setGraphLabels}
+                  style={{ width: 88 }}
+                  options={[
+                    { value: 'auto', label: '标签少' },
+                    { value: 'all', label: '标签全' },
+                    { value: 'none', label: '标签隐' },
+                  ]} />
+                <Select size="small" value={graphEdges} onChange={setGraphEdges}
                   style={{ width: 100 }}
                   options={[
-                    { value: 'auto', label: '标签: 自动' },
-                    { value: 'all', label: '标签: 全部' },
-                    { value: 'none', label: '标签: 隐藏' },
+                    { value: 'all', label: '全部连线' },
+                    { value: 'hierarchy', label: '仅层级' },
+                    { value: 'relation', label: '仅关系' },
                   ]} />
+                {graphLayout !== 'circular' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 11, color: '#909399' }}>疏</span>
+                    <input type="range" min={100} max={800} step={50} value={graphRepulsion}
+                      onChange={e => setGraphRepulsion(Number(e.target.value))}
+                      style={{ width: 60, margin: 0 }} />
+                    <span style={{ fontSize: 11, color: '#909399' }}>密</span>
+                  </div>
+                )}
               </div>
             )}
             <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
