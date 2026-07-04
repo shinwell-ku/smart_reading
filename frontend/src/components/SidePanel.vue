@@ -87,6 +87,13 @@ const graphNodeDetail = ref(null)
 watch(() => props.activeTab, (v) => { activeTab.value = v }, { immediate: true })
 watch(() => props.book, (b) => { if (b) { loadNotes(b.id); loadBookmarks(b.id); loadGraph(b.id) } }, { immediate: true })
 
+// PDF 选中文本自动填充
+onMounted(() => {
+  window.addEventListener('pdf-selection', (e) => {
+    if (e.detail && activeTab.value === 'translate') sourceText.value = e.detail.slice(0, 3000)
+  })
+})
+
 function swapLangs() {
   const s = sourceLang.value; const t = targetLang.value
   if (s !== 'auto') { sourceLang.value = t; targetLang.value = s }
@@ -97,18 +104,20 @@ function swapLangs() {
 async function translateText() {
   let text = sourceText.value.trim()
   if (!text) { ElMessage.info('请先输入文本'); return }
-  resultText.value = '翻译中...'
+  resultText.value = '⏳ 翻译中（模型推理较慢，请稍候）...'
   try {
     const r = await api.translate({ text, source_lang: sourceLang.value, target_lang: targetLang.value })
     resultText.value = r.translated_text || '翻译失败'
-  } catch { resultText.value = '翻译失败' }
+  } catch { resultText.value = '⏱️ 翻译超时或失败' }
 }
 
-function fillPageText() {
-  // 从 ReaderView 获取文本 - 通过 bridge
-  const pageContent = window._readerPages ? window._readerPages[props.page - 1] : ''
-  if (pageContent) { sourceText.value = pageContent.slice(0, 2000) }
-  else { ElMessage.info('当前页文本不可用') }
+async function fillPageText() {
+  if (!props.book) { ElMessage.info('请先打开一本书'); return }
+  try {
+    const r = await api.getPageContent(props.book.id, props.page)
+    if (r.content) { sourceText.value = r.content.slice(0, 3000) }
+    else { ElMessage.info('当前页无文本') }
+  } catch { ElMessage.info('获取文本失败') }
 }
 
 async function fullTranslate() {
@@ -169,7 +178,12 @@ function exportGraph() {
 <style scoped>
 .side-panel { display:flex;flex-direction:column;height:100%;overflow:hidden }
 .side-tabs { flex:1;display:flex;flex-direction:column }
-.side-tabs :deep(.el-tabs__content) { flex:1;overflow:hidden }
+.side-tabs :deep(.el-tabs__header) { margin:0;background:#f5f7fa;border-bottom:1px solid var(--el-border-color-light) }
+.side-tabs :deep(.el-tabs__nav-wrap) { padding:0 4px }
+.side-tabs :deep(.el-tabs__item) { height:32px;line-height:32px;padding:0 10px;font-size:12px;border:1px solid transparent;border-bottom:none;border-radius:4px 4px 0 0;margin:0 1px }
+.side-tabs :deep(.el-tabs__item.is-active) { background:#fff;border-color:var(--el-border-color-light);border-bottom-color:#fff }
+.side-tabs :deep(.el-tabs__active-bar) { display:none }
+.side-tabs :deep(.el-tabs__content) { flex:1;overflow:hidden;background:#fff }
 .side-tabs :deep(.el-tab-pane) { height:100%;overflow-y:auto }
 .panel-body { padding:12px;display:flex;flex-direction:column;gap:4px }
 .note-list { flex:1;overflow-y:auto;margin-top:8px }

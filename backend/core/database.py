@@ -10,7 +10,7 @@ from core.config import DB_DIR as _DB_DIR
 DB_PATH = os.path.join(_DB_DIR, 'database.db')
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False}, pool_size=20, max_overflow=40)
 
 # WAL 模式 + 外键约束
 @event.listens_for(engine, "connect")

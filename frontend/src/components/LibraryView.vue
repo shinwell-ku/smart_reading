@@ -27,7 +27,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../api.js'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 
 const emit = defineEmits(['openBook'])
 const books = ref([])
@@ -48,19 +48,28 @@ async function loadBooks() {
 async function importBooks() {
   if (importing.value) return
   importing.value = true
+  let loading
   try {
     const result = await window.electronAPI.openFileDialog({})
     if (result.canceled || !result.filePaths.length) { importing.value = false; return }
-    for (const fp of result.filePaths) {
+    // 显示加载遮罩
+    loading = ElLoading.service({ fullscreen: true, text: '正在导入...', background: 'rgba(0,0,0,0.45)' })
+    let success = 0, fail = 0
+    for (let i = 0; i < result.filePaths.length; i++) {
+      loading.setText(`正在导入 ${i + 1}/${result.filePaths.length}...`)
       try {
-        const r = await api.importBookByPath(fp)
-        if (r.error) ElMessage.warning(`导入失败: ${r.error}`)
-        else ElMessage.success(`✅ 《${r.title}》导入成功`)
-      } catch { ElMessage.warning('导入失败') }
+        const r = await api.importBookByPath(result.filePaths[i])
+        if (r.error) fail++; else success++
+      } catch { fail++ }
     }
+    loading.close(); loading = null
+    importing.value = false
+    const tips = []
+    if (success > 0) tips.push(`✅ 导入成功 ${success} 本`)
+    if (fail > 0) tips.push(`❌ ${fail} 本失败`)
+    ElMessage.info(tips.join('，') || '导入完成')
     await loadBooks()
-  } catch { ElMessage.error('导入异常') }
-  importing.value = false
+  } catch { if (loading) loading.close(); importing.value = false; ElMessage.error('导入异常') }
 }
 
 function openBook(book) { emit('openBook', book) }
