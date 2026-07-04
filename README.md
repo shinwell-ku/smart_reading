@@ -11,8 +11,10 @@
 - 阅读进度自动保存、全书关键词检索
 - 护眼模式、字体/行距调节、全屏阅读
 
-### 🌐 离线 AI 翻译
-- 支持中英中日中韩中法等 200+ 语种双向互译
+### 🌐 AI 翻译（本地 + 远程 LLM）
+- 支持本地 NLLB-200 离线模型（200+ 语种）
+- 支持远程 LLM（OpenAI 兼容 API），设置页面热切换
+- 预设厂商：DeepSeek、硅基流动、月之暗面、智谱 GLM、阿里通义千问、OpenAI 等
 - 划词翻译 + 全文双语对照翻译
 - 长难句智能优化、专业术语优化
 - 翻译记录本地保存、生词摘录
@@ -24,11 +26,13 @@
 - 生成层级知识结构：章节→要点→知识点
 
 ### 🎯 知识图谱可视化
-- 力导向知识图谱自动生成（ECharts Force Graph）
+- 知识图谱自动生成（规则 + 可选 BERT 模型）
+- 三种布局：力导向 / 环形 / 辐射
+- 连线过滤：全部连线 / 仅层级 / 仅关系
+- 标签密度控制：自动 / 全部 / 隐藏
+- 节点疏密度滑块调节
 - 缩放、拖拽、节点详情展开
-- 节点双击回溯原文（规划中）
-- 支持手动编辑图谱
-- PNG 图谱 / 知识大纲本地导出
+- 图谱 / 知识大纲导出
 
 ### 🔒 数据隐私
 - 100% 本地离线运行，零网络请求
@@ -141,10 +145,11 @@ smart_reading/
 │   ├── app.py                 # 入口（Flask 应用工厂）
 │   ├── core/                  # 基础设施
 │   │   ├── config.py          # 路径 + 服务容器
-│   │   └── database.py        # SQLAlchemy 引擎/会话
+│   │   ├── database.py        # SQLAlchemy 引擎/会话
+│   │   └── translator_config.py # 翻译模型配置
 │   ├── models/                # ORM 模型（8 张表）
 │   ├── schemas/               # Pydantic 请求/响应校验
-│   ├── routes/                # 控制器（8 个模块）
+│   ├── routes/                # 控制器（9 个模块）
 │   ├── services/              # 业务逻辑（解析/翻译/知识/OCR）
 │   └── pyproject.toml         # 依赖管理（uv）
 ├── frontend/                   # 前端（React + Vite）
@@ -152,24 +157,26 @@ smart_reading/
 │   ├── preload.js             # 安全桥接
 │   ├── index.html             # Vite 入口
 │   ├── vite.config.js         # 构建配置
+│   ├── assets/                # 应用图标
+│   ├── build/                 # electron-builder 配置 + 图标资源
 │   ├── src/                   # React 源码
 │   │   ├── main.jsx           # React 入口
 │   │   ├── App.jsx            # 根组件
 │   │   ├── App.css            # 全局样式
 │   │   ├── api.js             # API 客户端
-│   │   ├── pages/             # 页面组件
-│   │   └── components/        # 组件
+│   │   ├── pages/             # 页面组件（Library/Reader/Settings/About）
+│   │   └── components/        # 组件（SidePanel）
 │   └── dist_vue/              # 构建产物
 ├── data/                      # 本地数据
 │   ├── db/                    # SQLite 数据库
 │   ├── books/                 # 书籍文件
 │   ├── cache/                 # 缓存
+│   ├── config/                # 应用配置（translator.json）
 │   ├── exports/               # 导出/备份
 │   └── models/                # AI 模型权重
 ├── scripts/
-│   └── download_models.py     # 模型下载助手
-├── build/
-│   └── electron-builder.json  # 打包配置
+│   ├── download_models.py     # 模型下载助手
+│   └── build_package.sh       # 安装包构建脚本
 ├── CLAUDE.md                  # AI 辅助开发指南
 ├── start.sh / start.bat       # 启动脚本
 └── README.md
@@ -182,14 +189,15 @@ smart_reading/
 | 桌面框架 | Electron 28+ | 跨平台桌面应用 |
 | 前端框架 | React 18 + Ant Design 5 | 组件化 UI |
 | PDF 渲染 | react-pdf | 文字选中、缩放原生支持 |
-| 图谱可视化 | ECharts 5 | 力导向知识图谱 |
+| 图谱可视化 | ECharts 6 | 力导向/环形/辐射知识图谱 |
 | 后端框架 | Flask 3.0 | 轻量 REST API |
 | 数据库 | SQLite (WAL 模式) | 本地结构化存储 |
 | 包管理 | uv (Python) / npm (Node.js) | 依赖管理 |
-| AI 翻译 | NLLB-200 4bit | 200+ 语种量化模型 |
-| 知识抽取 | BERT 微调版 | 实体/关系提取 |
+| AI 翻译（本地） | NLLB-200 4bit | 200+ 语种量化模型 |
+| AI 翻译（远程） | OpenAI SDK | 兼容 OpenAI 格式的 LLM API |
+| 知识抽取 | BERT 微调版 / 正则规则 | 实体/关系提取 |
 | OCR | PaddleOCR 量化版 | 扫描 PDF 识别 |
-| 文档解析 | PyMuPDF + python-docx | PDF/DOCX 解析 |
+| 文档解析 | PyMuPDF + python-docx | PDF（内嵌目录优先）/ DOCX 解析 |
 
 ## 📋 开发计划
 

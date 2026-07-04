@@ -10,7 +10,7 @@ AI智慧阅读 — 纯本地离线 AI 智能阅读软件。四层架构：Electr
 
 前端采用 **React 18 + Ant Design 5 + react-pdf**
 
-Tech: **Electron 28** / **react-pdf** / **ECharts 5** / **Ant Design 5** / **Flask 3.0** / **SQLAlchemy 2.0** / **Pydantic 2** / **PyMuPDF** / **PyTorch 2.2** (CPU) / **Transformers 4** / **PaddleOCR** / **SQLite** (WAL)
+Tech: **Electron 28** / **react-pdf** / **ECharts 6** / **Ant Design 5** / **Flask 3.0** / **SQLAlchemy 2.0** / **Pydantic 2** / **PyMuPDF** / **PyTorch 2.2** (CPU) / **Transformers 4** / **PaddleOCR** / **openai 2** / **SQLite** (WAL)
 
 ## Key Commands
 
@@ -36,6 +36,14 @@ npm run build:win                # 打包 Windows
 npm run build:mac                # 打包 macOS
 ```
 
+### Build Production Package
+```bash
+cd frontend
+npm run build:mac                # macOS 安装包 (.dmg)
+npm run build:win                # Windows 安装包 (.exe)
+# 产物在 frontend/dist/ 目录下
+```
+
 ### Start Everything
 ```bash
 ./start.sh                       # 一键启动后端 + 前端
@@ -57,10 +65,10 @@ Electron Renderer → preload.js (contextBridge) → fetch → Python Flask API 
 ```
 backend/
 ├── app.py           # 入口
-├── core/            # 基础设施（config + database）
+├── core/            # 基础设施（config + database + translator_config）
 ├── models/          # SQLAlchemy ORM（8 张表）
 ├── schemas/         # Pydantic 校验
-├── routes/          # 控制器（8 个模块）
+├── routes/          # 控制器（9 个模块）
 └── services/        # 业务逻辑
 ```
 
@@ -86,8 +94,8 @@ frontend/
 ```
 
 ### Backend Service Modules
-- `document_parser.py` — PDF (PyMuPDF) / DOCX (python-docx) 解析，章节识别
-- `translator.py` — 离线翻译，NLLB-200 模型（局部），无模型时回退规则翻译（仅 EN→ZH 方向有效）
+- `document_parser.py` — PDF (PyMuPDF / 内嵌目录优先) / DOCX (python-docx) 解析，章节识别
+- `translator.py` — 翻译服务，支持本地 NLLB-200 模型 + 远程 LLM（OpenAI 兼容 API），通过 `data/config/translator.json` 配置热切换
 - `knowledge_extractor.py` — 规则+NLP混合知识抽取
 - `ocr_service.py` — PaddleOCR，扫描版PDF识别
 
@@ -108,7 +116,7 @@ data/
 
 | Model | What it does | Fallback without it |
 |-------|-------------|---------------------|
-| **NLLB-200** | 200-language translation | Rule-based translation (basic EN/CN only) |
+| **NLLB-200** | 200-language translation (local mode) | Rule-based translation (basic EN/CN only), or Remote LLM |
 | **BERT** | Chinese knowledge extraction | Regex-based extraction (lower accuracy) |
 
 Both are **optional** — the app degrades gracefully without them.
@@ -120,13 +128,22 @@ Both are **optional** — the app degrades gracefully without them.
 - **下载命令**: `uv run python scripts/download_models.py nllb200_4bit --mirror`
 - **重要**: 重新下载后得到的 `.bin` 文件需要用上述方法转换为 safetensors，否则 `from_pretrained(local_files_only=True)` 会报 torch 版本错误。
 
-### Translator 已知问题
+### 翻译引擎 (支持热切换)
+
+通过设置页面或 `data/config/translator.json` 配置：
+
+| 模式 | 说明 | 配置项 |
+|------|------|--------|
+| **本地模式** | NLLB-200 离线模型，免费但质量一般 | `mode: local` |
+| **远程模式** | 通过 OpenAI 兼容 API 调用外部 LLM | `mode: remote` + 厂商/地址/Key/模型 |
+
+远程模式预设厂商（OpenAI 兼容 API）：DeepSeek、硅基流动、月之暗面、智谱 GLM、阿里通义千问、字节豆包、讯飞星火、OpenAI、Anthropic(需 proxy)、Google Gemini、xAI Grok、Ollama
+
+### Translator Details
 
 - 语言检测用 `langdetect` + CJK 启发式混合策略
-- `langdetect` 不可靠的两种情况：
-  - 返回地区码（`zh-cn`、`en-us`）需映射为短码（`zh`、`en`），否则匹配不上 LANG_MAP → 误判为 `en` → 源=目标 → 返回原文
-  - 短文本（<30 字符）误判率高，例如 "Hello world" 被误判为荷兰语 `nl`
-- **修复**: `_normalize_lang_code()` 做地区码映射，短文本跳过 langdetect 直接走启发式
+- `langdetect` 短文本（<30 字符）直接跳过，走 CJK 字符比例检测
+- `langdetect` 返回地区码（`zh-cn`）自动映射为短码（`zh`）
 
 ## Key Patterns
 
@@ -146,8 +163,11 @@ Both are **optional** — the app degrades gracefully without them.
 
 ## Quality Notes
 
-- 翻译模型未加载时回退规则翻译（仅 EN→ZH 方向有效，其他语言方向显示下载提示）
+- 翻译引擎支持本地 NLLB 和远程 LLM 热切换，设置页面实时生效
+- 翻译远程模式使用标准 OpenAI SDK，兼容任何 OpenAI 格式 API
 - 语言检测使用 `langdetect` + CJK 启发式，短文本（<30 字符）绕过 langdetect 直接走启发式
 - 知识抽取模型未下载时使用纯正则规则
+- 知识图谱展示支持力导向/环形/辐射三种布局 + 连线/标签/疏密度控制
 - PaddleOCR 首次加载耗时约 30-60s
 - Reader 同时支持 PDF（react-pdf 渲染）和 DOCX（文本分页渲染，白底黑字带阴影）
+- PDF 目录优先使用内嵌书签（`doc.get_toc()`），无内嵌目录时回退正则识别

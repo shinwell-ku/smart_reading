@@ -33,20 +33,21 @@ backend/
 ├── app.py                    # 入口（应用工厂）
 ├── core/                     # 基础设施
 │   ├── config.py             # 路径 + 服务单例
-│   └── database.py           # SQLAlchemy 引擎/会话
+│   ├── database.py           # SQLAlchemy 引擎/会话
+│   └── translator_config.py  # 翻译模型配置（本地/远程，JSON 持久化）
 ├── models/                   # ORM 模型
 │   └── __init__.py           # 8 张表
 ├── schemas/                  # 数据校验
 │   └── __init__.py           # 全部 Pydantic Schema
-├── routes/                   # 控制器
+├── routes/                   # 控制器（9 个模块）
 │   ├── system.py / books.py / progress.py / notes.py
 │   ├── bookmarks.py / translation.py
-│   ├── knowledge.py / search.py
+│   ├── knowledge.py / search.py / settings.py
 │   └── __init__.py           # 蓝图注册
 ├── services/                 # 业务逻辑
-│   ├── document_parser.py    # PDF/DOCX 解析
-│   ├── translator.py         # NLLB-200 离线翻译
-│   ├── knowledge_extractor.py  # 知识抽取
+│   ├── document_parser.py    # PDF（内嵌目录优先）/ DOCX 解析
+│   ├── translator.py         # 翻译（本地 NLLB-200 + 远程 LLM，热切换）
+│   ├── knowledge_extractor.py  # 知识抽取（规则 + 可选 BERT）
 │   └── ocr_service.py        # PaddleOCR
 └── pyproject.toml
 ```
@@ -68,10 +69,30 @@ backend/
 
 | 模型 | 文件 | 用途 | 下载方式 |
 |------|------|------|---------|
-| **NLLB-200** | `data/models/nllb200_4bit/` | **离线翻译** — Meta 开源的 200 语种翻译模型，支持中/英/日/韩/法/德/俄/西等语言双向互译。`translator.py` 优先加载，无模型时自动回退到规则翻译。 | `uv run python ../scripts/download_models.py nllb200_4bit --mirror` |
+| **NLLB-200** | `data/models/nllb200_4bit/model.safetensors` | **离线翻译** — Meta 开源的 200 语种翻译模型。`translator.py` 优先加载，无模型时自动回退到规则翻译或远程 LLM。**注意**：需 safetensors 格式（已转换），`.bin` 文件与 torch 2.2.2 + transformers 4.48 不兼容。 | `uv run python ../scripts/download_models.py nllb200_4bit --mirror` |
 | **BERT** | `data/models/bert4cls_small/` | **知识抽取** — Google 的中文预训练模型，自动从书籍文本中提取核心概念、专业名词、定理案例，识别因果/包含/对比等逻辑关系。`knowledge_extractor.py` 优先加载，无模型时用纯正则规则。 | `uv run python ../scripts/download_models.py bert4cls_small --mirror` |
 
-> ⚠️ 两个模型均为**可选依赖**。不下载翻译模型则使用内置规则翻译（基础中英为主）；不下载知识模型则使用正则抽取（精度较低）。程序不会因缺少模型而崩溃。
+> ⚠️ 两个模型均为**可选依赖**。不下载翻译模型则使用内置规则翻译或远程 LLM；不下载知识模型则使用正则抽取。程序不会因缺少模型而崩溃。
+
+## 翻译引擎（新增）
+
+支持本地 NLLB-200 和远程 LLM 热切换，通过 `data/config/translator.json` 配置：
+
+```json
+{
+  "mode": "local",            // "local" | "remote"
+  "remote": {
+    "provider": "openai",     // deepseek | siliconflow | moonshot | ...
+    "api_base": "https://api.openai.com/v1",
+    "api_key": "",
+    "model": "gpt-4o-mini",
+    "max_tokens": 4096,
+    "temperature": 0.3
+  }
+}
+```
+
+远程模式使用标准 `openai` SDK，兼容任何 OpenAI 格式 API（DeepSeek、硅基流动、智谱 GLM、Ollama 等）。
 
 ## API 路由
 
@@ -83,12 +104,15 @@ backend/
 | GET/PUT | `/api/progress/:bookId` | progress |
 | GET/POST/DELETE | `/api/.../notes` | notes |
 | GET/POST/DELETE | `/api/.../bookmarks` | bookmarks |
+| PUT | `/api/bookmarks/:id` | bookmarks（更新标题） |
 | POST | `/api/translate[/full]` | translation |
 | GET | `/api/translate/status/:id` | translation |
 | POST/GET | `/api/translate/words` | translation |
 | POST/GET/PUT | `/api/knowledge/extract\|graph\|export` | knowledge |
 | GET | `/api/search/:bookId` | search |
 | POST | `/api/backup\|/api/data/clear` | system |
+| GET/PUT | `/api/settings/translator` | settings（翻译配置） |
+| GET | `/api/settings/translator/presets` | settings（厂商预设） |
 
 ## 数据存储
 
