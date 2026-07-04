@@ -40,6 +40,14 @@ class DocumentParser:
         scan_page_count = 0  # 扫描页计数
         text_page_count = 0  # 文本页计数
 
+        # 优先使用 PDF 内嵌目录（bookmarks/outline）
+        try:
+            toc = doc.get_toc()
+            if toc and len(toc) > 0:
+                chapters = [{"title": item[1], "page": item[2], "level": item[0]} for item in toc]
+        except Exception:
+            pass
+
         for page_num in range(total_pages):
             page = doc.load_page(page_num)
             text = page.get_text()
@@ -54,8 +62,8 @@ class DocumentParser:
             pages.append(page_text)
             full_text_parts.append(page_text)
 
-            # 尝试从文本中识别章节标题
-            if page_text:
+            # 仅在 PDF 无内嵌目录时，从文本中识别章节标题
+            if not chapters and page_text:
                 lines = page_text.split('\n')
                 for line in lines[:3]:
                     line = line.strip()

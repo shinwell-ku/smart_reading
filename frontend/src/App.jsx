@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Button } from 'antd'
-import { ApartmentOutlined } from '@ant-design/icons'
+import { Button, Modal } from 'antd'
+import { ApartmentOutlined, StarOutlined } from '@ant-design/icons'
 import { api } from './api'
 import Library from './pages/Library'
 import Reader from './pages/Reader'
 import SidePanel from './components/SidePanel'
 import Settings from './pages/Settings'
-import About from './pages/About'
-
-const TABS = { library: 'library', reader: 'reader', settings: 'settings', about: 'about' }
+import AboutModal from './pages/About'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('library')
@@ -17,6 +15,7 @@ export default function App() {
   const [backendOnline, setBackendOnline] = useState(false)
   const [sideTab, setSideTab] = useState('translate')
   const [panelCollapsed, setPanelCollapsed] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [panelWidth, setPanelWidth] = useState(480)
   const panelRef = useRef(null)
   const dragRef = useRef(null)
@@ -72,7 +71,7 @@ export default function App() {
         <Button className={`topbar-btn ${activeTab === 'library' ? 'active' : ''}`} onClick={() => handleMenu('library')}>📚 书库</Button>
         <Button className={`topbar-btn ${activeTab === 'reader' ? 'active' : ''}`} disabled={!currentBook} onClick={() => handleMenu('reader')}>📖 阅读</Button>
         <Button className="topbar-btn" onClick={() => handleMenu('settings')}>⚙️ 设置</Button>
-        <Button className="topbar-btn" onClick={() => handleMenu('about')}>ℹ️ 关于</Button>
+        <Button className="topbar-btn" onClick={() => setAboutOpen(true)}>ℹ️ 关于</Button>
         <div className="topbar-spacer" />
         <div className="topbar-status">
           <span className={`status-dot ${backendOnline ? 'online' : 'offline'}`} />
@@ -130,14 +129,14 @@ export default function App() {
                   {[
                     { key: 'translate', label: '翻译', icon: '🌐' },
                     { key: 'notes', label: '笔记', icon: '📝' },
-                    { key: 'bookmarks', label: '书签', icon: '🔖' },
+                    { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
                     { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
                   ].map(tab => (
                     <div key={tab.key}
                       onClick={() => { setSideTab(tab.key); setPanelCollapsed(false) }}
-                      style={{ padding: '8px 0', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #e4e7ed', color: tab.key === sideTab ? '#409eff' : '#909399', width: '100%' }}>
-                      <div style={{ fontSize: 16 }}>{tab.icon}</div>
-                      <div style={{ fontSize: 10 }}>{tab.label}</div>
+                      style={{ padding: '10px 0 8px', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #e4e7ed', color: tab.key === sideTab ? '#1677ff' : '#909399', width: '100%', background: tab.key === sideTab ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${tab.key === sideTab ? '#1677ff' : 'transparent'}`, transition: 'all 0.15s' }}>
+                      <div style={{ fontSize: 20 }}>{tab.icon}</div>
+                      <div style={{ fontSize: 10, marginTop: 2, fontWeight: tab.key === sideTab ? 600 : 400 }}>{tab.label}</div>
                     </div>
                   ))}
                 </div>
@@ -152,12 +151,8 @@ export default function App() {
           </div>
         )}
 
-        {/* About */}
-        {activeTab === 'about' && (
-          <div className="full-view">
-            <About />
-          </div>
-        )}
+        {/* About Modal */}
+        <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       </div>
     </div>
   )

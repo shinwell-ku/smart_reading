@@ -4,7 +4,7 @@ html, body, #root { height: 100%; overflow: hidden; font-family: -apple-system, 
 .app { display: flex; flex-direction: column; height: 100vh; }
 
 /* TopBar */
-.topbar { display: flex; align-items: center; height: 44px; background: linear-gradient(135deg, #0f0c29, #302b63); padding: 0 12px; gap: 2px; flex-shrink: 0; }
+.topbar { display: flex; align-items: center; height: 44px; background: linear-gradient(135deg, #1a1a40, #4a3f7a); padding: 0 12px; gap: 2px; flex-shrink: 0; }
 .topbar-logo { display: flex; align-items: center; gap: 6px; color: #fff; font-size: 15px; font-weight: 600; padding: 0 10px 0 4px; }
 .topbar-logo img { width: 20px; height: 20px; border-radius: 3px; }
 .topbar-btn { padding: 5px 10px; border-radius: 4px; font-size: 12px; color: rgba(255,255,255,0.7); cursor: pointer; background: none; border: none; transition: all 0.15s; }
@@ -68,13 +68,7 @@ html, body, #root { height: 100%; overflow: hidden; font-family: -apple-system, 
 .panel-graph { flex: 1; min-height: 150px; }
 
 /* Settings */
-.settings-view { padding: 20px 24px; max-width: 520px; overflow-y: auto; height: 100%; }
-.settings-view h3 { font-size: 14px; font-weight: 500; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #e4e7ed; }
-.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
-.setting-row label { font-size: 13px; }
-
-/* About */
-.about-view { text-align: center; padding: 60px 20px; overflow-y: auto; height: 100%; }
+.settings-view { padding: 20px 24px; max-width: 560px; overflow-y: auto; height: 100%; }
 
 /* PDF selection */
 .pdf-container ::selection { background: rgba(64, 158, 255, 0.35); }

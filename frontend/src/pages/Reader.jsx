@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
-import { Button, Slider, message } from 'antd'
+import { Button, Slider, message, Tooltip } from 'antd'
+import { BarsOutlined, StarOutlined } from '@ant-design/icons'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url'
@@ -191,7 +192,7 @@ export default function Reader({ book, onPageChange, onBack }) {
       <div key={i}>
         <div className={`outline-item ${ch.page === curPage ? 'active' : ''}`}
           style={{ paddingLeft: 12 + indent * 16 }}
-          onClick={() => { setOutlineOpen(false); onGo(ch.page) }}>
+          onClick={() => onGo(ch.page)}>
           <span style={{ fontSize: 11, color: '#909399', marginRight: 4 }}>第{ch.page}页</span>
           <span>{ch.title}</span>
         </div>
@@ -212,22 +213,22 @@ export default function Reader({ book, onPageChange, onBack }) {
   return (
     <>
       <div className="reader-toolbar">
-        <Button type="text" onClick={onBack}>←</Button>
+        <Tooltip title="返回书库"><Button type="text" onClick={onBack}>←</Button></Tooltip>
         <span className="reader-title">{book?.title || ''}</span>
-        <Button type="text" disabled={!chapters.length} onClick={() => setOutlineOpen(v => !v)} style={{ color: outlineOpen ? '#409eff' : undefined }}>📑</Button>
-        <Button type="text" disabled={!numPages} onClick={() => {
+        <Tooltip title="目录"><Button type="text" disabled={!chapters.length} onClick={() => setOutlineOpen(v => !v)} style={{ color: outlineOpen ? '#409eff' : undefined }} icon={<BarsOutlined />} /></Tooltip>
+        <Tooltip title="缩小"><Button type="text" disabled={!numPages} onClick={() => {
           if (isDocx) setDocxFontSize(s => Math.max(9, s - 2))
           else setScale(s => Math.max(0.5, s - 0.2))
-        }}>−</Button>
+        }}>−</Button></Tooltip>
         <span style={{ fontSize: 12, color: '#909399', minWidth: 36, textAlign: 'center' }}>
           {isDocx ? Math.round(docxFontSize / 15 * 100) + '%' : Math.round(scale * 100) + '%'}
         </span>
-        <Button type="text" disabled={!numPages} onClick={() => {
+        <Tooltip title="放大"><Button type="text" disabled={!numPages} onClick={() => {
           if (isDocx) setDocxFontSize(s => Math.min(36, s + 2))
           else setScale(s => Math.min(3, s + 0.2))
-        }}>+</Button>
-        <Button type="text" disabled={!numPages} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success('书签已添加: 第' + page + '页'); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }}>🔖</Button>
-        <Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button>
+        }}>+</Button></Tooltip>
+        <Tooltip title="添加书签"><Button type="text" disabled={!numPages} icon={<StarOutlined />} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success('书签已添加: 第' + page + '页'); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }} /></Tooltip>
+        <Tooltip title="全屏"><Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button></Tooltip>
       </div>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {outlineOpen && chapters.length > 0 && (

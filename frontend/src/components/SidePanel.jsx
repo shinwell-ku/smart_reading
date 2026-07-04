@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message, notification } from 'antd'
-import { DeleteOutlined, ApartmentOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ApartmentOutlined, StarOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
   if (!text) return ''
@@ -20,7 +20,7 @@ function cleanText(text) {
 const TABS = [
   { key: 'translate', label: '翻译', icon: '🌐' },
   { key: 'notes', label: '笔记', icon: '📝' },
-  { key: 'bookmarks', label: '书签', icon: '🔖' },
+  { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
   { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
 ]
 
@@ -37,7 +37,12 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [editingBmId, setEditingBmId] = useState(null)
   const [editingBmTitle, setEditingBmTitle] = useState('')
   const [graphExists, setGraphExists] = useState(false)
+  const [graphData, setGraphData] = useState(null)
+  const [graphLayout, setGraphLayout] = useState('force')
+  const [graphLabels, setGraphLabels] = useState('auto')
   const graphRef = useRef(null)
+  const chartRef = useRef(null)
+  const resizeObserverRef = useRef(null)
   const pollRef = useRef(null)
 
   useEffect(() => {
@@ -111,30 +116,83 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     setNotes(r.notes || [])
   }
 
+  const renderGraph = (data, layout, labels) => {
+    if (!data || !graphRef.current) return
+    const showLabel = labels === 'all' ? true : labels === 'none' ? false : undefined
+    const repulsion = layout === 'circular' ? 0 : 400
+
+    if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null }
+    if (resizeObserverRef.current) { resizeObserverRef.current.disconnect(); resizeObserverRef.current = null }
+
+    import('echarts').then(echarts => {
+      requestAnimationFrame(() => {
+        if (!graphRef.current) return
+        const chart = echarts.init(graphRef.current)
+        chartRef.current = chart
+        chart.setOption({
+          tooltip: {
+            formatter: (p) => {
+              if (p.dataType !== 'node') return ''
+              const desc = p.data.description || ''
+              return `<b>${p.name}</b>${desc ? '<br/><span style="font-size:11px;color:#909399">' + desc.slice(0, 80) + '</span>' : ''}`
+            }
+          },
+          series: [{
+            type: 'graph',
+            layout: layout,
+            roam: true, draggable: true,
+            circular: layout === 'circular' ? { rotateLabel: true } : undefined,
+            data: data.nodes.map(n => ({
+              id: n.id, name: n.label,
+              symbolSize: [28, 22, 16, 12][n.level] || 12,
+              itemStyle: {
+                color: ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1'][n.level] || '#bfbfbf',
+                borderColor: '#fff', borderWidth: 2,
+              },
+              label: { show: showLabel !== undefined ? showLabel : n.level <= 2, fontSize: 11, fontWeight: n.level <= 1 ? 600 : 400 },
+              description: n.description,
+            })),
+            edges: data.edges.map(e => ({
+              source: e.source, target: e.target,
+              label: { show: showLabel !== undefined ? showLabel : true, formatter: e.label || '', fontSize: 9, color: '#909399' },
+              lineStyle: {
+                color: e.type === 'hierarchy' ? '#bfbfbf' : '#1677ff',
+                width: e.type === 'hierarchy' ? 1 : 2,
+                curveness: e.type === 'hierarchy' ? 0.2 : 0.3,
+                type: e.type === 'hierarchy' ? 'solid' : 'dashed',
+              },
+            })),
+            force: { repulsion, edgeLength: [80, 200], gravity: 0.05 },
+            label: { show: showLabel !== undefined ? showLabel : true, position: 'right', fontSize: 10, color: '#303133' },
+            lineStyle: { color: '#e0e0e0' },
+            emphasis: { focus: 'adjacency', lineStyle: { width: 2 } },
+          }]
+        })
+        const obs = new ResizeObserver(() => { try { chart.resize() } catch {} })
+        obs.observe(graphRef.current)
+        resizeObserverRef.current = obs
+      })
+    }).catch(e => console.error('[图谱] 渲染失败:', e))
+  }
+
   const loadGraph = async (bid) => {
     try {
       const data = await api.getKnowledgeGraph(bid)
       if (!data.nodes || !data.nodes.length) {
         setGraphExists(false)
+        setGraphData(null)
         return
       }
       setGraphExists(true)
-      const echarts = (await import('echarts')).default
-      // 用 rAF 等 DOM 就绪后再初始化图表
-      requestAnimationFrame(() => {
-        if (!graphRef.current) return
-        const chart = echarts.init(graphRef.current)
-        chart.setOption({
-          tooltip: { formatter: (p) => p.dataType === 'node' ? p.name : '' },
-          series: [{ type: 'graph', layout: 'force', roam: true, draggable: true,
-            data: data.nodes.map(n => ({ id: n.id, name: n.label, symbolSize: Math.max(8, 20 - n.level * 3), itemStyle: { color: ['#4263eb', '#51cf66', '#ffd43b', '#ff6b6b'][n.level] || '#748ffc' } })),
-            edges: data.edges.map(e => ({ source: e.source, target: e.target, label: { show: true, formatter: e.label || '', fontSize: 9 }, lineStyle: { color: '#adb5bd', width: 1, curveness: 0.2 } })),
-            force: { repulsion: 300, edgeLength: [60, 150] }, label: { show: true, position: 'right', fontSize: 10 },
-          }]
-        })
-      })
+      setGraphData(data)
+      renderGraph(data, graphLayout, graphLabels)
     } catch (e) { console.error('[图谱] 加载失败:', e) }
   }
+
+  // 布局/标签切换时重新渲染
+  useEffect(() => {
+    if (graphData) renderGraph(graphData, graphLayout, graphLabels)
+  }, [graphLayout, graphLabels])
 
   // Language options
   const langOpts = [
@@ -164,7 +222,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         )}
         {activeTab === 'notes' && (
           <div className="panel-body" style={{ flex: 1 }}>
-            <Input.TextArea value={noteText} onChange={e => setNoteText(e.target.value)} rows={2} placeholder="输入笔记..." />
+            <Input.TextArea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="输入笔记..." />
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {['#FFD700', '#FF6B6B', '#51CF66', '#339AF0', '#CC66FF'].map(c => (
                 <div key={c} onClick={() => setNoteColor(c)} style={{ width: 18, height: 18, borderRadius: '50%', background: c, cursor: 'pointer', border: noteColor === c ? '2px solid #303133' : '2px solid transparent', flexShrink: 0 }} />
@@ -222,6 +280,24 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         )}
         {activeTab === 'knowledge' && (
           <div className="panel-body" style={{ flex: 1 }}>
+            {graphExists && (
+              <div style={{ display: 'flex', gap: 6, paddingBottom: 6, flexShrink: 0 }}>
+                <Select size="small" value={graphLayout} onChange={setGraphLayout}
+                  style={{ width: 100 }}
+                  options={[
+                    { value: 'force', label: '力导向' },
+                    { value: 'circular', label: '环形' },
+                    { value: 'tree', label: '树形' },
+                  ]} />
+                <Select size="small" value={graphLabels} onChange={setGraphLabels}
+                  style={{ width: 100 }}
+                  options={[
+                    { value: 'auto', label: '标签: 自动' },
+                    { value: 'all', label: '标签: 全部' },
+                    { value: 'none', label: '标签: 隐藏' },
+                  ]} />
+              </div>
+            )}
             <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
               {!graphExists && !pollRef.current && (
                 <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 40, fontSize: 13 }}>
@@ -241,12 +317,11 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               style={pollRef.current ? { color: '#c0c4cc', borderColor: '#e4e7ed' } : {}}
               onClick={() => {
                 if (!book || pollRef.current) return
-                // 立即锁定按钮，避免 await 期间重复点击
                 pollRef.current = 'lock'
                 const bid = book.id
                 api.extractKnowledge(bid).then(r => {
                   message.success(r.message || '知识抽取已启动')
-                  if (!pollRef.current) return // 已取消（组件卸载）
+                  if (!pollRef.current) return
                   let attempts = 0
                   pollRef.current = setInterval(async () => {
                     attempts++
@@ -279,9 +354,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         {TABS.map(tab => (
           <div key={tab.key}
             onClick={() => onTabChange(tab.key)}
-            style={{ padding: '10px 0', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #e4e7ed', color: tab.key === activeTab ? '#409eff' : '#909399', width: '100%', background: tab.key === activeTab ? '#f0f7ff' : 'transparent' }}>
-            <div style={{ fontSize: 16 }}>{tab.icon}</div>
-            <div style={{ fontSize: 10, marginTop: 2 }}>{tab.label}</div>
+            style={{ padding: '12px 0 8px', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #e4e7ed', color: tab.key === activeTab ? '#1677ff' : '#909399', width: '100%', background: tab.key === activeTab ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${tab.key === activeTab ? '#1677ff' : 'transparent'}`, transition: 'all 0.15s' }}>
+            <div style={{ fontSize: 20 }}>{tab.icon}</div>
+            <div style={{ fontSize: 10, marginTop: 2, fontWeight: tab.key === activeTab ? 600 : 400 }}>{tab.label}</div>
           </div>
         ))}
       </div>
