@@ -27,22 +27,15 @@ uv run python scripts/download_models.py nllb200_4bit --mirror  # 下载翻译�
 uv run python scripts/download_models.py --all --mirror         # 下载全部模型
 ```
 
-### Frontend (Electron / npm)
+### Frontend (Vue + Vite)
 ```bash
-cd electron
+cd frontend
 npm install                      # 安装依赖
-npm start                        # 启动应用（自动拉起 Python 后端）
+npm start                        # 启动应用（自动编译 + 启动 Electron）
 npm run dev                      # 开发模式（带 DevTools）
+npm run build:vue                # 仅编译前端
 npm run build:win                # 打包 Windows 安装包
 npm run build:mac                # 打包 macOS DMG
-npm run build:all                # 同时构建两种平台
-```
-
-### ECharts 离线库安装（首次）
-```bash
-cd electron
-npm install echarts --save-dev
-cp node_modules/echarts/dist/echarts.min.js src/lib/
 ```
 
 ## Architecture
@@ -74,7 +67,7 @@ backend/
 - `knowledge_extractor.py` — 规则+NLP混合知识抽取，加载 `data/models/bert4cls_small`（可选）
 - `ocr_service.py` — PaddleOCR，扫描版PDF识别
 
-### Frontend Modules (`electron/src/js/`)
+### Frontend Modules (`frontend/src/js/`)
 - `app.js` — 主控制器：导航切换、后端心跳检查、设置面板
 - `api.js` — 纯 HTTP 客户端（fetch → http://127.0.0.1:5001/api/...）
 - `library.js` — 书库：书籍列表、导入、搜索、删除

@@ -82,8 +82,8 @@ cd backend
 uv sync                        # 安装依赖
 uv run python app.py &        # 启动后端服务 (127.0.0.1:5001)
 
-# 2. 启动 Electron 前端
-cd electron
+# 2. 启动 前端
+cd frontend
 npm install
 npm start
 ```
@@ -113,7 +113,7 @@ cd backend
 uv run python ../scripts/download_models.py --all --mirror
 
 # 打包 macOS DMG（需 macOS）
-cd electron
+cd frontend
 npm run build:mac
 
 # 打包 Windows 安装包（需 Windows）
@@ -128,7 +128,7 @@ npm run build:all
 2. 复制 `data/models/`（如有则打包 AI 模型）
 3. 创建数据目录占位
 4. 调用 electron-builder 生成安装包
-5. 安装包位于 `electron/dist/`
+5. 安装包位于 `frontend/dist/`
 
 > 用户安装后开箱即用，无需手动安装 Python 或下载模型。
 > 安装目录下包含完整的 Python 运行时 + 所有依赖 + AI 模型。
@@ -147,7 +147,7 @@ smart_reading/
 │   ├── routes/                # 控制器（8 个模块）
 │   ├── services/              # 业务逻辑（解析/翻译/知识/OCR）
 │   └── pyproject.toml         # 依赖管理（uv）
-├── electron/                   # Electron 前端
+├── frontend/                   # 前端
 │   ├── main.js                # 主进程
 │   ├── preload.js             # 安全桥接
 │   ├── package.json

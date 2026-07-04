@@ -62,7 +62,7 @@ if __name__ == '__main__':
     init_db()
 
     # 前端静态文件服务（生产构建后）
-    frontend_dist = os.path.join(os.path.dirname(BASE_DIR), 'electron', 'dist')
+    frontend_dist = os.path.join(os.path.dirname(BASE_DIR), 'frontend', 'dist')
     if os.path.exists(frontend_dist):
         from flask import send_from_directory
         @app.route('/')

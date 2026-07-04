@@ -15,6 +15,6 @@ timeout /t 3 /nobreak >nul
 
 REM 2. 启动 Electron 前端
 echo [2/2] 启动前端...
-cd electron
+cd frontend
 npm start
 pause

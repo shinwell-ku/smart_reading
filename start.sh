@@ -12,15 +12,15 @@ if [ ! -f "$DIR/backend/.venv/bin/python3" ] && [ ! -d "$DIR/backend/.venv" ]; t
 fi
 
 # 检查前端依赖是否安装
-if [ ! -d "$DIR/electron/node_modules" ]; then
+if [ ! -d "$DIR/frontend/node_modules" ]; then
   echo "❌ 未安装 Node.js 依赖，请先执行:"
-  echo "   cd electron && npm install"
+  echo "   cd frontend && npm install"
   exit 1
 fi
 
 # 构建 Vue 前端
 echo "[构建] 编译前端..."
-cd "$DIR/electron"
+cd "$DIR/frontend"
 [ -f "dist_vue/index.html" ] || npx vite build --logLevel error 2>/dev/null || true
 
 echo "=============================="
@@ -39,7 +39,7 @@ BACKEND_PID=$!
 sleep 3
 
 # 启动 Electron 前端
-cd "$DIR/electron"
+cd "$DIR/frontend"
 npm start
 
 # 退出时关闭后端

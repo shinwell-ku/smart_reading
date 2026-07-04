@@ -5,7 +5,7 @@
 # ============================================================
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RES_DIR="$DIR/electron/build-resources"
+RES_DIR="$DIR/frontend/build-resources"
 BACKEND_SRC="$DIR/backend"
 DATA_SRC="$DIR/data"
 
@@ -47,11 +47,11 @@ echo "[4/6] 创建数据目录..."
 for d in db books cache exports; do mkdir -p "$RES_DIR/data/$d"; done
 
 echo "[5/6] 编译 Vue 前端..."
-cd "$DIR/electron"
+cd "$DIR/frontend"
 npx vite build --logLevel error 2>/dev/null || echo "⚠️  前端编译失败"
 
 echo "[6/6] 构建 Electron 安装包..."
-cd "$DIR/electron"
+cd "$DIR/frontend"
 
 case "$1" in
   win) npx electron-builder --win --config build/electron-builder.json ;;

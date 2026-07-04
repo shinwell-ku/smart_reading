@@ -10,14 +10,14 @@ backend/venv/
 
 # Node
 node_modules/
-electron/node_modules/
+frontend/node_modules/
 
 # Build output
-electron/dist/
-electron/dist_vue/
-electron/build-resources/
-electron/src/lib/echarts.min.js
-electron/build/resources/logo_topbar.png
+frontend/dist/
+frontend/dist_vue/
+frontend/build-resources/
+frontend/src/lib/echarts.min.js
+frontend/build/resources/logo_topbar.png
 
 # Data files
 data/books/*
