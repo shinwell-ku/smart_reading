@@ -115,6 +115,13 @@ export default function Reader({ book, onPageChange, onBack }) {
     return () => el.removeEventListener('wheel', handler)
   }, [numPages, goTo])
 
+  // 监听书签跳转事件
+  useEffect(() => {
+    const h = (e) => { if (e.detail && pdfRef.current) goTo(e.detail) }
+    window.addEventListener('go-to-page', h)
+    return () => window.removeEventListener('go-to-page', h)
+  }, [goTo])
+
   // 键盘
   useEffect(() => {
     const handler = (e) => {
