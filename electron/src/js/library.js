@@ -188,7 +188,8 @@ const Library = {
 
   /** 删除书籍 */
   async deleteBook(bookId) {
-    if (!confirm('确定要删除这本书吗？所有笔记和进度也将被删除。')) return;
+    const ok = await UI.confirm('确定要删除这本书吗？所有笔记和进度也将被删除。', true);
+    if (!ok) return;
 
     try {
       const result = await api.deleteBook(bookId);

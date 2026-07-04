@@ -230,6 +230,27 @@
     </main>
   </div>
 
+  <!-- ==================== 自定义确认对话框 ==================== -->
+  <div id="confirmModal" class="modal" style="z-index:9000">
+    <div class="modal-content" style="width:380px">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <img src="assets/logo.png" style="width:24px;height:24px;border-radius:4px" alt="" />
+          <h3 style="font-size:15px">确认</h3>
+        </div>
+        <button class="modal-close" onclick="UI.hideConfirm()">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align:center;padding:24px 20px">
+        <div style="font-size:28px;margin-bottom:12px">📚</div>
+        <p id="confirmMessage" style="font-size:14px;line-height:1.6">确定要执行此操作吗？</p>
+      </div>
+      <div class="modal-footer" style="justify-content:center;gap:12px">
+        <button class="btn btn-secondary" id="btnConfirmCancel" style="min-width:80px" onclick="UI.hideConfirm()">取消</button>
+        <button class="btn btn-danger" id="btnConfirmOk" style="min-width:80px">确定</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 导入进度遮罩 ==================== -->
   <div id="importOverlay" class="overlay hidden">
     <div class="overlay-content">

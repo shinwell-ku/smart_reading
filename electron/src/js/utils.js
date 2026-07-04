@@ -126,3 +126,42 @@ const LANG_NAMES = {
 function getLangName(code) {
   return LANG_NAMES[code] || code;
 }
+
+// ============================================================
+// 自定义确认对话框（替代浏览器 confirm）
+// ============================================================
+const UI = {
+  /** 显示确认对话框，返回 Promise<boolean> */
+  confirm(message, danger = false) {
+    return new Promise(resolve => {
+      const modal = $('#confirmModal');
+      const msgEl = $('#confirmMessage');
+      const okBtn = $('#btnConfirmOk');
+      const cancelBtn = $('#btnConfirmCancel');
+
+      msgEl.textContent = message;
+      if (danger) {
+        okBtn.className = 'btn btn-danger';
+        okBtn.style.cssText = 'min-width:80px';
+      } else {
+        okBtn.className = 'btn btn-primary';
+        okBtn.style.cssText = 'min-width:80px';
+      }
+
+      modal.classList.add('show');
+
+      const cleanup = () => {
+        modal.classList.remove('show');
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+      };
+
+      okBtn.onclick = () => { cleanup(); resolve(true); };
+      cancelBtn.onclick = () => { cleanup(); resolve(false); };
+    });
+  },
+
+  hideConfirm() {
+    $('#confirmModal').classList.remove('show');
+  }
+};

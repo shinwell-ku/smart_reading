@@ -112,8 +112,10 @@ const App = {
       } catch (e) { showToast('备份失败: ' + e.message); }
     });
     $('#btnResetData').addEventListener('click', async () => {
-      if (!confirm('确定清除所有数据？此操作不可恢复！')) return;
-      if (!confirm('再次确认：所有数据将被永久删除？')) return;
+      const ok1 = await UI.confirm('确定清除所有数据？此操作不可恢复！', true);
+      if (!ok1) return;
+      const ok2 = await UI.confirm('再次确认：所有数据将被永久删除？', true);
+      if (!ok2) return;
       try { await api.clearAllData(); showToast('所有数据已清除'); await Library.loadBooks(); }
       catch (e) { showToast('重置失败: ' + e.message); }
     });
