@@ -99,6 +99,19 @@ export default function Reader({ book, onPageChange, onBack }) {
     setDocxAllText(parts.join('\n\n---\n\n'))
   }
 
+  // 监听容器宽度变化（面板拖拽时重算页高）
+  useEffect(() => {
+    if (!scrollRef.current) return
+    const obs = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width - 48
+        if (w > 100) setContainerWidth(w)
+      }
+    })
+    obs.observe(scrollRef.current)
+    return () => obs.disconnect()
+  }, [])
+
   // PDF 加载完成
   const onLoadSuccess = useCallback(async (pdf) => {
     setNumPages(pdf.numPages)
@@ -121,28 +134,35 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
   }, [])
 
-  // 测量各页高度（依赖 scale 变化）
+  // 测量各页高度（基于实际渲染宽度计算，而非 scale）
   useEffect(() => {
-    if (!pdfRef.current || !numPages) return
+    if (!pdfRef.current || !numPages || !scrollRef.current) return
+    const renderWidth = scrollRef.current.clientWidth - 48
+    if (renderWidth < 100) return
+    let cancelled = false
     ;(async () => {
       const heights = []
       for (let i = 1; i <= numPages; i++) {
+        if (cancelled) return
         try {
           const p = await pdfRef.current.getPage(i)
-          const vp = p.getViewport({ scale })
-          heights.push(vp.height)
-        } catch { heights.push(800) }
+          const vp = p.getViewport({ scale: 1 })
+          // 实际渲染高度 = 页面自然比例 × 渲染宽度
+          const pageHeight = vp.height * (renderWidth / vp.width)
+          heights.push(pageHeight)
+        } catch { heights.push(600) }
       }
-      // 计算累计偏移
-      let accum = 24  // 顶部间距
+      if (cancelled) return
+      let accum = 24
       const offsets = heights.map(h => {
         const o = accum
-        accum += h + 32  // 页间距（含阴影空间）
+        accum += h + 32
         return o
       })
       setPageOffsets(offsets)
     })()
-  }, [pdfRef.current, numPages, scale, containerWidth])
+    return () => { cancelled = true }
+  }, [numPages, containerWidth])
 
   // 从滚动位置找当前页
   const findPageFromScroll = useCallback((scrollTop) => {
@@ -237,7 +257,12 @@ export default function Reader({ book, onPageChange, onBack }) {
     return pages
   })(scrollPos)  // eslint-disable-line no-unused-expressions
 
-  const totalHeight = pageOffsets.length > 0 ? pageOffsets[pageOffsets.length - 1] + 1200 : 0
+  // 最后一项偏移 + 页高度 + 底部边距 = 总滚动高度
+  const totalHeight = (() => {
+    if (!pageOffsets.length || !pdfRef.current || !scrollRef.current) return 0
+    const lastH = scrollRef.current.clientHeight  // 至少一屏高
+    return pageOffsets[pageOffsets.length - 1] + lastH
+  })()
 
   const renderChapters = (items, indent, curPage, onGo) => {
     return items.map((ch, i) => (
