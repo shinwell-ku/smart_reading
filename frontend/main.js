@@ -192,17 +192,16 @@ function createMainWindow() {
       nodeIntegration: false,
       webSecurity: false, // 允许访问本地文件
     },
-    show: false,
-    backgroundColor: '#f5f5f5'
+    show: true,
+    backgroundColor: '#f0f2f5'
   });
 
   // 加载页面
   const indexPath = path.join(__dirname, 'dist', 'index.html');
   mainWindow.loadFile(indexPath);
 
-  // 显示窗口
+  // 开发模式打开开发者工具
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
     if (isDev) {
       mainWindow.webContents.openDevTools();
     }
