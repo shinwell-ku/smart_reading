@@ -153,10 +153,10 @@ export default function Reader({ book, onPageChange, onBack }) {
         } catch { heights.push(600) }
       }
       if (cancelled) return
-      let accum = 16
+      let accum = 8
       const offsets = heights.map(h => {
         const o = accum
-        accum += h + 16  // 页间距
+        accum += h + 5  // 页间距
         return o
       })
       setPageOffsets(offsets)

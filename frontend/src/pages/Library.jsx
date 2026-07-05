@@ -1,29 +1,34 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api'
 import { Input, Button, message, Modal, Spin } from 'antd'
+import { LoadingOutlined } from '@ant-design/icons'
 import { CloudUploadOutlined } from '@ant-design/icons'
 
 export default function Library({ onOpenBook }) {
   const [books, setBooks] = useState([])
   const [search, setSearch] = useState('')
   const [importing, setImporting] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 首次加载 + 重试（后端起不来时每隔 3 秒重试一次）
+    // 首次加载 + 后端未就绪时自动重试
+    let cancelled = false
     const tryLoad = async () => {
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 20; i++) {
+        if (cancelled) return
         try {
           const r = await api.listBooks()
-          if (r.books) { setBooks(r.books); return }
+          if (r.books) { setBooks(r.books); setLoading(false); return }
         } catch {}
-        await new Promise(r => setTimeout(r, 3000))
+        await new Promise(r => setTimeout(r, 1500))
       }
+      setLoading(false)
     }
     tryLoad()
     // 后端就绪事件触发立即刷新
-    const h = () => tryLoad()
-    window.addEventListener('backend-ready', h)
-    return () => window.removeEventListener('backend-ready', h)
+    const onReady = () => tryLoad()
+    window.addEventListener('backend-ready', onReady)
+    return () => { cancelled = true; window.removeEventListener('backend-ready', onReady) }
   }, [])
 
   const loadBooks = async () => {
@@ -77,7 +82,12 @@ export default function Library({ onOpenBook }) {
           <Button type="primary" size="small" icon={<CloudUploadOutlined />} onClick={handleImport} loading={importing}>导入书籍</Button>
         </div>
       </div>
-      {filtered.length > 0 ? (
+      {loading ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#909399', flexDirection: 'column', gap: 8 }}>
+          <Spin size="large" />
+          <p style={{ marginTop: 12 }}>正在加载书库...</p>
+        </div>
+      ) : filtered.length > 0 ? (
         <div className="book-grid">
           {filtered.map(b => (
             <div key={b.id} className="book-card" onClick={() => onOpenBook(b)}>
