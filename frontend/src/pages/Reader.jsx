@@ -142,11 +142,9 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
   }, [])
 
-  // 测量各页高度（与 Page 渲染宽度一致）
+  // 测量各页高度（基于 scale，页面渲染的真实高度）
   useEffect(() => {
     if (!pdfRef.current || !numPages) return
-    const w = containerWidth || (scrollRef.current?.clientWidth ? Math.round(scrollRef.current.clientWidth - 32) : 800)
-    if (w < 100) return
     let cancelled = false
     ;(async () => {
       const heights = []
@@ -154,9 +152,8 @@ export default function Reader({ book, onPageChange, onBack }) {
         if (cancelled) return
         try {
           const p = await pdfRef.current.getPage(i)
-          const vp = p.getViewport({ scale: 1 })
-          const pageHeight = vp.height * (w / vp.width)
-          heights.push(pageHeight)
+          const vp = p.getViewport({ scale })
+          heights.push(Math.round(vp.height))
         } catch { heights.push(600) }
       }
       if (cancelled) return
@@ -167,9 +164,17 @@ export default function Reader({ book, onPageChange, onBack }) {
         return o
       })
       setPageOffsets(offsets)
+      // 恢复到上次阅读的页面
+      if (offsets.length > 0 && pageRef.current > 1) {
+        const savedPage = pageRef.current
+        const target = offsets[savedPage - 1]
+        if (target !== undefined && scrollRef.current) {
+          scrollRef.current.scrollTop = target
+        }
+      }
     })()
     return () => { cancelled = true }
-  }, [numPages, containerWidth])
+  }, [numPages, scale])
 
   // 从滚动位置找当前页
   const findPageFromScroll = useCallback((scrollTop) => {
