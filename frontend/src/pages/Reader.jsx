@@ -166,17 +166,18 @@ export default function Reader({ book, onPageChange, onBack }) {
         return o
       })
       setPageOffsets(offsets)
-      // 恢复到上次阅读的页面
-      if (offsets.length > 0 && pageRef.current > 1) {
-        const savedPage = pageRef.current
-        const target = offsets[savedPage - 1]
-        if (target !== undefined && scrollRef.current) {
-          scrollRef.current.scrollTop = target
-        }
-      }
     })()
     return () => { cancelled = true }
   }, [numPages, scale])
+
+  // pageOffsets 就绪后恢复到上次阅读位置（DOM 已有正确高度）
+  useEffect(() => {
+    if (!pageOffsets.length || !scrollRef.current || pageRef.current <= 1) return
+    const target = pageOffsets[pageRef.current - 1]
+    if (target !== undefined) {
+      scrollRef.current.scrollTop = target
+    }
+  }, [pageOffsets])
 
   // 从滚动位置找当前页
   const findPageFromScroll = useCallback((scrollTop) => {
