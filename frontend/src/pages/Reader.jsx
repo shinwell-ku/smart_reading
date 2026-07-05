@@ -276,9 +276,33 @@ export default function Reader({ book, onPageChange, onBack }) {
         if (isDocx) setDocxFontSize(s => Math.min(36, s + 2))
         else setScale(s => Math.min(3, s + 0.2))
       }
+      else if ((e.ctrlKey || e.metaKey) && (e.key === '-')) {
+        e.preventDefault()
+        if (isDocx) setDocxFontSize(s => Math.max(9, s - 2))
+        else setScale(s => Math.max(0.5, s - 0.2))
+      }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
+  }, [numPages, isDocx])
+
+  // Ctrl+滚轮 / 手势缩放（触控板双指捏合）
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const handler = (e) => {
+      if (!numPages && !isDocx) return
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        if (isDocx) {
+          setDocxFontSize(s => Math.max(9, Math.min(36, s + (e.deltaY > 0 ? -2 : 2))))
+        } else {
+          setScale(s => Math.max(0.5, Math.min(3, s + (e.deltaY > 0 ? -0.15 : 0.15))))
+        }
+      }
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
   }, [numPages, isDocx])
 
   // 接收书签跳转事件
