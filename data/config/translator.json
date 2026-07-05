@@ -1,10 +1,10 @@
 {
-  "mode": "remote",
+  "mode": "local",
   "remote": {
-    "provider": "openai",
-    "api_base": "https://api.openai.com/v1",
+    "provider": "deepseek",
+    "api_base": "https://api.deepseek.com",
     "api_key": "",
-    "model": "gpt-4o-mini",
+    "model": "deepseek-chat",
     "max_tokens": 4096,
     "temperature": 0.3
   }
