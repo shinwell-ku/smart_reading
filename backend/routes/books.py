@@ -253,6 +253,15 @@ def delete_book(book_id):
     return jsonify(MessageResponse(message="删除成功").model_dump())
 
 
+@books_bp.route('/<int:book_id>/full_text', methods=['GET'])
+def get_book_full_text(book_id):
+    """获取书籍全文（供连续滚动阅读）"""
+    text_path = os.path.join(CACHE_DIR, f'book_{book_id}_text.txt')
+    if not os.path.exists(text_path):
+        return jsonify({"error": "全文不存在"}), 404
+    return send_file(text_path, mimetype='text/plain; charset=utf-8')
+
+
 @books_bp.route('/<int:book_id>/page/<int:page_num>', methods=['GET'])
 def get_page_content(book_id, page_num):
     pages_path = os.path.join(CACHE_DIR, f'book_{book_id}_pages.json')

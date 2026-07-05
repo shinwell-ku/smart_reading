@@ -9,44 +9,47 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
 export default function Reader({ book, onPageChange, onBack }) {
   const [numPages, setNumPages] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(1)       // 当前可见页
   const [scale, setScale] = useState(1)
   const [docxFontSize, setDocxFontSize] = useState(15)
   const [loading, setLoading] = useState(true)
   const [pdfData, setPdfData] = useState(null)
   const [docxContent, setDocxContent] = useState('')
-  const [loadingContent, setLoadingContent] = useState(false)
-  const viewerRef = useRef(null)
+  const [docxAllText, setDocxAllText] = useState('')  // DOCX 全文
+  const [pageOffsets, setPageOffsets] = useState([])   // PDF 各页偏移量
+  const scrollRef = useRef(null)
   const pageRef = useRef(page)
   pageRef.current = page
   const pdfRef = useRef(null)
+  const [containerWidth, setContainerWidth] = useState(0)
 
   const isDocx = book?.file_type === 'docx'
   const chapters = book?.chapters || []
   const [outlineOpen, setOutlineOpen] = useState(false)
+  const [scrollPos, setScrollPos] = useState(0)  // 触发虚拟滚动重渲染
 
-  // Load document
+  // ─── 加载文档 ───
   useEffect(() => {
     if (!book) return
     setLoading(true)
     setPdfData(null)
     setDocxContent('')
+    setDocxAllText('')
     setPage(1)
     setNumPages(0)
+    setPageOffsets([])
 
     if (isDocx) {
-      // DOCX: 从 API 获取分页数据
       ;(async () => {
         try {
-          // 恢复进度
           let restoredPage = 1
           try { const p = await api.getProgress(book.id); if (p?.current_page > 1) restoredPage = p.current_page } catch {}
           setPage(restoredPage)
           onPageChange(restoredPage)
           setNumPages(book.total_pages || 0)
+          // DOCX: 加载全部文本
+          await loadDocxAll(book.id)
           setLoading(false)
-          // 加载第一页内容
-          await loadDocxContent(restoredPage)
         } catch (e) {
           console.error('DOCX load error:', e)
           message.error('文档加载失败')
@@ -54,14 +57,12 @@ export default function Reader({ book, onPageChange, onBack }) {
         }
       })()
     } else {
-      // PDF: 通过 fetch 获取
       ;(async () => {
         try {
           let restoredPage = 1
           try { const p = await api.getProgress(book.id); if (p?.current_page > 1) restoredPage = p.current_page } catch {}
           setPage(restoredPage)
           onPageChange(restoredPage)
-
           const resp = await fetch(`http://127.0.0.1:5001/api/books/${book.id}/file`)
           const buffer = await resp.arrayBuffer()
           setPdfData({ data: new Uint8Array(buffer) })
@@ -75,44 +76,109 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
   }, [book])
 
-  const loadDocxContent = async (pageNum) => {
-    if (!book) return
-    setLoadingContent(true)
+  // DOCX: 加载全部文本
+  const loadDocxAll = async (bid) => {
     try {
-      const r = await api.getPageContent(book.id, pageNum)
-      setDocxContent(r.content || '')
-    } catch (e) {
-      console.error('Page content load error:', e)
-      setDocxContent('')
+      // 尝试获取全文（后端缓存了 book_{id}_text.txt）
+      const resp = await fetch(`http://127.0.0.1:5001/api/books/${bid}/full_text`)
+      if (resp.ok) {
+        const text = await resp.text()
+        setDocxAllText(text)
+        return
+      }
+    } catch {}
+    // 回退：逐页加载
+    const total = book?.total_pages || 0
+    const parts = []
+    for (let i = 1; i <= total; i++) {
+      try {
+        const r = await api.getPageContent(bid, i)
+        if (r.content) parts.push(r.content)
+      } catch {}
     }
-    setLoadingContent(false)
+    setDocxAllText(parts.join('\n\n---\n\n'))
   }
 
-  const fitToWidth = useCallback(async () => {
-    const pdf = pdfRef.current
-    if (!pdf || !viewerRef.current) return
-    try {
-      const pageObj = await pdf.getPage(1)
-      const vp = pageObj.getViewport({ scale: 1 })
-      const containerW = viewerRef.current.clientWidth - 48
-      if (containerW < 100) return
-      const fitScale = containerW / vp.width
-      setScale(Math.max(0.5, Math.min(2, parseFloat(fitScale.toFixed(2)))))
-    } catch {}
-  }, [])
-
-  const onLoadSuccess = useCallback((pdf) => {
+  // PDF 加载完成
+  const onLoadSuccess = useCallback(async (pdf) => {
     setNumPages(pdf.numPages)
     pdfRef.current = pdf
-    fitToWidth()
-    if (viewerRef.current && !viewerRef.current._resizeObs) {
-      const obs = new ResizeObserver(() => fitToWidth())
-      obs.observe(viewerRef.current)
-      viewerRef.current._resizeObs = obs
+    // 计算容器宽度
+    if (scrollRef.current) {
+      const w = scrollRef.current.clientWidth - 48
+      if (w > 100) setContainerWidth(w)
     }
-  }, [fitToWidth])
+    // 首次自适应缩放
+    if (pdf.numPages > 0) {
+      try {
+        const pageObj = await pdf.getPage(1)
+        const vp = pageObj.getViewport({ scale: 1 })
+        const containerW = scrollRef.current?.clientWidth - 48 || 800
+        if (containerW > 100) {
+          setScale(Math.max(0.5, Math.min(2, parseFloat((containerW / vp.width).toFixed(2)))))
+        }
+      } catch {}
+    }
+  }, [])
 
-  // 选中文本 → 广播（PDF 和 DOCX 共用）
+  // 测量各页高度（依赖 scale 变化）
+  useEffect(() => {
+    if (!pdfRef.current || !numPages) return
+    ;(async () => {
+      const heights = []
+      for (let i = 1; i <= numPages; i++) {
+        try {
+          const p = await pdfRef.current.getPage(i)
+          const vp = p.getViewport({ scale })
+          heights.push(vp.height)
+        } catch { heights.push(800) }
+      }
+      // 计算累计偏移
+      let accum = 16  // 顶部间距
+      const offsets = heights.map(h => {
+        const o = accum
+        accum += h + 12  // 页间距
+        return o
+      })
+      setPageOffsets(offsets)
+    })()
+  }, [pdfRef.current, numPages, scale, containerWidth])
+
+  // 从滚动位置找当前页
+  const findPageFromScroll = useCallback((scrollTop) => {
+    const offsets = pageOffsets
+    for (let i = offsets.length - 1; i >= 0; i--) {
+      if (scrollTop >= offsets[i] - 50) return i + 1  // 容忍 50px
+    }
+    return 1
+  }, [pageOffsets])
+
+  // 滚动到指定页
+  const scrollToPage = useCallback((pageNum) => {
+    const offset = pageOffsets[pageNum - 1]
+    if (offset !== undefined && scrollRef.current) {
+      scrollRef.current.scrollTo({ top: offset, behavior: 'smooth' })
+    }
+  }, [pageOffsets])
+
+  // 滚动处理
+  let _scrollTimer = null
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current || !pageOffsets.length) return
+    const scrollTop = scrollRef.current.scrollTop
+    setScrollPos(scrollTop)  // 触发虚拟滚动重渲染
+    const currentPage = findPageFromScroll(scrollTop)
+    if (currentPage !== pageRef.current) {
+      pageRef.current = currentPage
+      setPage(currentPage)
+      onPageChange(currentPage)
+      // 防抖保存进度
+      if (_scrollTimer) clearTimeout(_scrollTimer)
+      _scrollTimer = setTimeout(() => saveProgress(currentPage), 500)
+    }
+  }, [pageOffsets, onPageChange])
+
+  // 选中文本 → 广播
   const handleSelect = useCallback(() => {
     setTimeout(() => {
       const sel = window.getSelection()
@@ -123,59 +189,20 @@ export default function Reader({ book, onPageChange, onBack }) {
     }, 50)
   }, [])
 
-  // 翻页
+  // 跳转（外部：书签、大纲）
   const goTo = useCallback((n) => {
     const p = Math.max(1, Math.min(n, numPages))
-    setPage(p)
-    onPageChange(p)
-    saveProgress(p)
-    if (isDocx) {
-      loadDocxContent(p)
-    }
-  }, [numPages, onPageChange, isDocx, book])
-
-  const prevPage = useCallback(() => goTo(page - 1), [page, goTo])
-  const nextPage = useCallback(() => goTo(page + 1), [page, goTo, numPages])
-
-  // 滚轮翻页（防抖 500ms）
-  useEffect(() => {
-    const el = viewerRef.current
-    if (!el) return
-    let lastWheel = 0
-    const handler = (e) => {
-      if (!numPages) return
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault()
-        if (isDocx) {
-          setDocxFontSize(s => Math.max(9, Math.min(36, s + (e.deltaY > 0 ? -2 : 2))))
-        } else {
-          setScale(s => Math.max(0.5, Math.min(3, s + (e.deltaY > 0 ? -0.15 : 0.15))))
-        }
-        return
-      }
-      const now = Date.now()
-      if (now - lastWheel < 500) return
-      lastWheel = now
-      if (e.deltaY > 0 && pageRef.current < numPages) { e.preventDefault(); goTo(pageRef.current + 1) }
-      else if (e.deltaY < 0 && pageRef.current > 1) { e.preventDefault(); goTo(pageRef.current - 1) }
-    }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [numPages, goTo, isDocx])
-
-  // 监听书签跳转事件
-  useEffect(() => {
-    const h = (e) => { if (e.detail) goTo(e.detail) }
-    window.addEventListener('go-to-page', h)
-    return () => window.removeEventListener('go-to-page', h)
-  }, [goTo])
+    scrollToPage(p)
+  }, [numPages, scrollToPage])
 
   // 键盘
   useEffect(() => {
     const handler = (e) => {
       if (!numPages) return
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goTo(pageRef.current - 1) }
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goTo(pageRef.current + 1) }
+      if (e.key === 'ArrowUp') { e.preventDefault(); scrollRef.current?.scrollBy({ top: -60, behavior: 'smooth' }) }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); scrollRef.current?.scrollBy({ top: 60, behavior: 'smooth' }) }
+      else if (e.key === 'PageUp') { e.preventDefault(); scrollRef.current?.scrollBy({ top: -scrollRef.current?.clientHeight * 0.8 || -400, behavior: 'smooth' }) }
+      else if (e.key === 'PageDown') { e.preventDefault(); scrollRef.current?.scrollBy({ top: scrollRef.current?.clientHeight * 0.8 || 400, behavior: 'smooth' }) }
       else if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault()
         if (isDocx) setDocxFontSize(s => Math.min(36, s + 2))
@@ -184,9 +211,34 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [numPages, goTo, isDocx])
+  }, [numPages, isDocx])
 
-  // 递归渲染章节树
+  // 接收书签跳转事件
+  useEffect(() => {
+    const h = (e) => { if (e.detail) goTo(e.detail) }
+    window.addEventListener('go-to-page', h)
+    return () => window.removeEventListener('go-to-page', h)
+  }, [goTo])
+
+  const saveProgress = (p) => {
+    if (!book) return
+    try { api.updateProgress(book.id, { current_page: p, total_pages: numPages, percentage: numPages > 0 ? p / numPages : 0, scroll_position: 0 }) } catch {}
+  }
+
+  // ─── 计算可见的 PDF 页面列表（scrollPos 变化时重算）───
+  const visiblePages = (() => {
+    if (!pageOffsets.length || !scrollRef.current) return []
+    const st = scrollRef.current.scrollTop
+    const vh = scrollRef.current.clientHeight
+    const start = Math.max(1, findPageFromScroll(Math.max(0, st - 600)) - 1)
+    const end = Math.min(numPages, findPageFromScroll(st + vh + 600) + 1)
+    const pages = []
+    for (let i = start; i <= end; i++) pages.push(i)
+    return pages
+  })(scrollPos)  // eslint-disable-line no-unused-expressions
+
+  const totalHeight = pageOffsets.length > 0 ? pageOffsets[pageOffsets.length - 1] + 1200 : 0
+
   const renderChapters = (items, indent, curPage, onGo) => {
     return items.map((ch, i) => (
       <div key={i}>
@@ -196,18 +248,9 @@ export default function Reader({ book, onPageChange, onBack }) {
           <span style={{ fontSize: 11, color: '#909399', marginRight: 4 }}>第{ch.page}页</span>
           <span>{ch.title}</span>
         </div>
-        {ch.children && ch.children.length > 0 && renderChapters(ch.children, indent + 1, curPage, onGo)}
+        {ch.children?.length > 0 && renderChapters(ch.children, indent + 1, curPage, onGo)}
       </div>
     ))
-  }
-
-  let _saveTimer = null
-  const saveProgress = (p) => {
-    if (!book) return
-    if (_saveTimer) clearTimeout(_saveTimer)
-    _saveTimer = setTimeout(async () => {
-      try { await api.updateProgress(book.id, { current_page: p, total_pages: numPages, percentage: numPages > 0 ? p / numPages : 0, scroll_position: 0 }) } catch {}
-    }, 500)
   }
 
   return (
@@ -239,38 +282,43 @@ export default function Reader({ book, onPageChange, onBack }) {
             </div>
           </div>
         )}
-      <div className="pdf-container" ref={viewerRef} onMouseUp={handleSelect}>
-        {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>}
-        {!loading && isDocx && (
-          <div className="docx-viewer" style={{ background: '#fff', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', borderRadius: 2, padding: '40px 56px', maxWidth: 800, width: '100%', margin: '0 auto', lineHeight: 1.9, fontSize: docxFontSize, color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {loadingContent ? (
-              <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>
-            ) : (
-              docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>暂无内容</div>
-            )}
-          </div>
-        )}
-        {!loading && !isDocx && pdfData && (
-          <Document
-            file={pdfData}
-            onLoadSuccess={onLoadSuccess}
-            onLoadError={(e) => { console.error('PDF error:', e); message.error(`PDF加载失败`) }}
-          >
-            <Page
-              pageNumber={page}
-              scale={scale}
-              renderTextLayer={true}
-              renderAnnotationLayer={false}
-            />
-          </Document>
-        )}
-      </div>
+        {/* 滚动容器 */}
+        <div className="pdf-container" ref={scrollRef} onScroll={handleScroll} onMouseUp={handleSelect}>
+          {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>}
+          {!loading && isDocx && (
+            <div className="docx-viewer" style={{ background: '#fff', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', borderRadius: 2, padding: '40px 56px', maxWidth: 800, width: '100%', margin: '0 auto', lineHeight: 1.9, fontSize: docxFontSize, color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {docxAllText ? docxAllText : (docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>暂无内容</div>)}
+            </div>
+          )}
+          {!loading && !isDocx && pdfData && (
+            <Document
+              file={pdfData}
+              onLoadSuccess={onLoadSuccess}
+              onLoadError={(e) => { console.error('PDF error:', e); message.error(`PDF加载失败`) }}
+            >
+              {/* 虚拟滚动：只渲染可见页 */}
+              <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
+                {visiblePages.map(p => (
+                  <div key={p} style={{ position: 'absolute', top: pageOffsets[p - 1], left: '50%', transform: 'translateX(-50%)' }}>
+                    <Page
+                      pageNumber={p}
+                      scale={scale}
+                      width={scrollRef.current?.clientWidth - 48}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={false}
+                    />
+                  </div>
+                ))}
+              </div>
+            </Document>
+          )}
+        </div>
       </div>
       <div className="reader-footer">
-        <Button type="text" disabled={page <= 1} onClick={prevPage}>◀</Button>
+        <Button type="text" disabled={page <= 1} onClick={() => goTo(page - 1)}>◀</Button>
         <span style={{ fontSize: 12, color: '#606266', minWidth: 90, textAlign: 'center' }}>第 {page}/{numPages} 页</span>
         <Slider min={1} max={numPages || 1} value={page} onChange={goTo} style={{ flex: 1, maxWidth: 300, margin: '0 8px' }} />
-        <Button type="text" disabled={page >= numPages} onClick={nextPage}>▶</Button>
+        <Button type="text" disabled={page >= numPages} onClick={() => goTo(page + 1)}>▶</Button>
         <span style={{ fontSize: 11, color: '#c0c4cc', minWidth: 36 }}>{numPages > 0 ? Math.round(page / numPages * 100) + '%' : ''}</span>
       </div>
     </>
