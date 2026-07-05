@@ -16,6 +16,7 @@ export default function Reader({ book, onPageChange, onBack }) {
   const [pdfData, setPdfData] = useState(null)
   const [docxContent, setDocxContent] = useState('')
   const [docxAllText, setDocxAllText] = useState('')  // DOCX 全文
+  const [docxPages, setDocxPages] = useState([])       // DOCX 分页数组
   const [pageOffsets, setPageOffsets] = useState([])   // PDF 各页偏移量
   const scrollRef = useRef(null)
   const pageRef = useRef(page)
@@ -78,14 +79,20 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
   }, [book])
 
-  // DOCX: 加载全部文本
+  // DOCX: 加载全部文本并按页拆分
   const loadDocxAll = async (bid) => {
     try {
-      // 尝试获取全文（后端缓存了 book_{id}_text.txt）
       const resp = await fetch(`http://127.0.0.1:5001/api/books/${bid}/full_text`)
       if (resp.ok) {
         const text = await resp.text()
         setDocxAllText(text)
+        // 按页码标记拆分（每页约 40 行）
+        const lines = text.split('\n')
+        const pages = []
+        for (let i = 0; i < lines.length; i += 40) {
+          pages.push(lines.slice(i, i + 40).join('\n'))
+        }
+        setDocxPages(pages.length ? pages : [text])
         return
       }
     } catch {}
@@ -98,7 +105,8 @@ export default function Reader({ book, onPageChange, onBack }) {
         if (r.content) parts.push(r.content)
       } catch {}
     }
-    setDocxAllText(parts.join('\n\n---\n\n'))
+    setDocxPages(parts.length ? parts : ['暂无内容'])
+    setDocxAllText(parts.join('\n'))
   }
 
   // 监听容器宽度变化（面板拖拽时重算页高 + 缩放）
@@ -170,14 +178,20 @@ export default function Reader({ book, onPageChange, onBack }) {
     return () => { cancelled = true }
   }, [numPages, scale])
 
-  // pageOffsets 就绪后恢复到上次阅读位置（DOM 已有正确高度）
+  // 恢复到上次阅读位置
   useEffect(() => {
-    if (!pageOffsets.length || !scrollRef.current || pageRef.current <= 1) return
-    const target = pageOffsets[pageRef.current - 1]
-    if (target !== undefined) {
-      scrollRef.current.scrollTop = target
+    if (!scrollRef.current || pageRef.current <= 1) return
+    if (isDocx) {
+      // DOCX：滚动到目标页
+      const pages = scrollRef.current.querySelectorAll('.docx-page')
+      const target = pages[pageRef.current - 1]
+      if (target) target.scrollIntoView({ block: 'start' })
+    } else if (pageOffsets.length) {
+      // PDF：使用 pageOffsets
+      const target = pageOffsets[pageRef.current - 1]
+      if (target !== undefined) scrollRef.current.scrollTop = target
     }
-  }, [pageOffsets])
+  }, [pageOffsets, isDocx])
 
   // 从滚动位置找当前页
   const findPageFromScroll = useCallback((scrollTop) => {
@@ -190,28 +204,47 @@ export default function Reader({ book, onPageChange, onBack }) {
 
   // 滚动到指定页
   const scrollToPage = useCallback((pageNum) => {
-    const offset = pageOffsets[pageNum - 1]
-    if (offset !== undefined && scrollRef.current) {
-      scrollRef.current.scrollTo({ top: offset, behavior: 'smooth' })
+    if (!scrollRef.current) return
+    if (isDocx) {
+      const pages = scrollRef.current.querySelectorAll('.docx-page')
+      const target = pages[pageNum - 1]
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } else {
+      const offset = pageOffsets[pageNum - 1]
+      if (offset !== undefined) scrollRef.current.scrollTo({ top: offset, behavior: 'smooth' })
     }
-  }, [pageOffsets])
+  }, [pageOffsets, isDocx])
 
   // 滚动处理
   let _scrollTimer = null
   const handleScroll = useCallback(() => {
-    if (!scrollRef.current || !pageOffsets.length) return
+    if (!scrollRef.current) return
     const scrollTop = scrollRef.current.scrollTop
-    setScrollPos(scrollTop)  // 触发虚拟滚动重渲染
-    const currentPage = findPageFromScroll(scrollTop)
+    setScrollPos(scrollTop)
+
+    let currentPage = 1
+    if (isDocx) {
+      // DOCX：根据可见区域判断当前页
+      const pages = scrollRef.current.querySelectorAll('.docx-page')
+      for (let i = 0; i < pages.length; i++) {
+        const rect = pages[i].getBoundingClientRect()
+        if (rect.top < scrollRef.current.clientHeight * 0.6) {
+          currentPage = i + 1
+        }
+      }
+    } else if (pageOffsets.length) {
+      // PDF：根据 pageOffsets 计算
+      currentPage = findPageFromScroll(scrollTop)
+    }
+
     if (currentPage !== pageRef.current) {
       pageRef.current = currentPage
       setPage(currentPage)
       onPageChange(currentPage)
-      // 防抖保存进度
       if (_scrollTimer) clearTimeout(_scrollTimer)
       _scrollTimer = setTimeout(() => saveProgress(currentPage), 500)
     }
-  }, [pageOffsets, onPageChange])
+  }, [pageOffsets, onPageChange, isDocx])
 
   // 选中文本 → 广播
   const handleSelect = useCallback(() => {
@@ -322,8 +355,14 @@ export default function Reader({ book, onPageChange, onBack }) {
         <div className="pdf-container" ref={scrollRef} onScroll={handleScroll} onMouseUp={handleSelect}>
           {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>}
           {!loading && isDocx && (
-            <div className="docx-viewer" style={{ background: '#fff', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', borderRadius: 2, padding: '40px 56px', maxWidth: 800, width: '100%', margin: '0 auto', lineHeight: 1.9, fontSize: docxFontSize, color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {docxAllText ? docxAllText : (docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>暂无内容</div>)}
+            <div style={{ width: '100%', maxWidth: 800, margin: '0 auto', padding: '16px 0' }}>
+              {docxPages.map((pageText, idx) => (
+                <div key={idx} className="docx-page" data-page={idx + 1}
+                  style={{ background: '#fff', boxShadow: '0 1px 8px rgba(0,0,0,0.08)', borderRadius: 2, padding: '32px 48px', marginBottom: 12, lineHeight: 1.9, fontSize: docxFontSize, color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {pageText}
+                </div>
+              ))}
+              {!docxPages.length && (docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>暂无内容</div>)}
             </div>
           )}
           {!loading && !isDocx && pdfData && (
