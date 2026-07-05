@@ -11,24 +11,16 @@ export default function Library({ onOpenBook }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 首次加载 + 后端未就绪时自动重试
-    let cancelled = false
-    const tryLoad = async () => {
-      for (let i = 0; i < 20; i++) {
-        if (cancelled) return
-        try {
-          const r = await api.listBooks()
-          if (r.books) { setBooks(r.books); setLoading(false); return }
-        } catch {}
-        await new Promise(r => setTimeout(r, 1500))
-      }
+    // 此时后端已就绪（主进程等待后端启动后才加载界面）
+    setLoading(true)
+    api.listBooks().then(r => {
+      setBooks(r.books || [])
       setLoading(false)
-    }
-    tryLoad()
-    // 后端就绪事件触发立即刷新
-    const onReady = () => tryLoad()
+    }).catch(() => setLoading(false))
+    // 后端就绪事件触发刷新（兜底）
+    const onReady = () => { api.listBooks().then(r => setBooks(r.books || [])).catch(() => {}) }
     window.addEventListener('backend-ready', onReady)
-    return () => { cancelled = true; window.removeEventListener('backend-ready', onReady) }
+    return () => window.removeEventListener('backend-ready', onReady)
   }, [])
 
   const loadBooks = async () => {
