@@ -104,7 +104,7 @@ export default function Reader({ book, onPageChange, onBack }) {
     if (!scrollRef.current) return
     const obs = new ResizeObserver(entries => {
       for (const entry of entries) {
-        const w = entry.contentRect.width - 48
+        const w = Math.round(entry.contentRect.width)
         if (w > 100) setContainerWidth(w)
       }
     })
@@ -118,26 +118,15 @@ export default function Reader({ book, onPageChange, onBack }) {
     pdfRef.current = pdf
     // 计算容器宽度
     if (scrollRef.current) {
-      const w = scrollRef.current.clientWidth - 48
+      const w = Math.round(scrollRef.current.clientWidth - 32)
       if (w > 100) setContainerWidth(w)
-    }
-    // 首次自适应缩放
-    if (pdf.numPages > 0) {
-      try {
-        const pageObj = await pdf.getPage(1)
-        const vp = pageObj.getViewport({ scale: 1 })
-        const containerW = scrollRef.current?.clientWidth - 48 || 800
-        if (containerW > 100) {
-          setScale(Math.max(0.5, Math.min(2, parseFloat((containerW / vp.width).toFixed(2)))))
-        }
-      } catch {}
     }
   }, [])
 
   // 测量各页高度（与 Page 渲染宽度一致）
   useEffect(() => {
     if (!pdfRef.current || !numPages) return
-    const w = containerWidth || (scrollRef.current?.clientWidth ? scrollRef.current.clientWidth - 48 : 800)
+    const w = containerWidth || (scrollRef.current?.clientWidth ? Math.round(scrollRef.current.clientWidth - 32) : 800)
     if (w < 100) return
     let cancelled = false
     ;(async () => {
@@ -152,10 +141,10 @@ export default function Reader({ book, onPageChange, onBack }) {
         } catch { heights.push(600) }
       }
       if (cancelled) return
-      let accum = 8
+      let accum = 4
       const offsets = heights.map(h => {
         const o = accum
-        accum += h + 5
+        accum += h + 2
         return o
       })
       setPageOffsets(offsets)
