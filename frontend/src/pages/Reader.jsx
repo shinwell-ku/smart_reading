@@ -99,13 +99,23 @@ export default function Reader({ book, onPageChange, onBack }) {
     setDocxAllText(parts.join('\n\n---\n\n'))
   }
 
-  // 监听容器宽度变化（面板拖拽时重算页高）
+  // 监听容器宽度变化（面板拖拽时重算页高 + 缩放）
   useEffect(() => {
     if (!scrollRef.current) return
     const obs = new ResizeObserver(entries => {
       for (const entry of entries) {
         const w = Math.round(entry.contentRect.width)
-        if (w > 100) setContainerWidth(w)
+        if (w > 100) {
+          setContainerWidth(w)
+          // 自适应缩放
+          if (pdfRef.current) {
+            pdfRef.current.getPage(1).then(pageObj => {
+              const vp = pageObj.getViewport({ scale: 1 })
+              const fit = Math.max(0.5, Math.min(2, parseFloat((w / vp.width).toFixed(2))))
+              setScale(fit)
+            }).catch(() => {})
+          }
+        }
       }
     })
     obs.observe(scrollRef.current)
@@ -116,10 +126,19 @@ export default function Reader({ book, onPageChange, onBack }) {
   const onLoadSuccess = useCallback(async (pdf) => {
     setNumPages(pdf.numPages)
     pdfRef.current = pdf
-    // 计算容器宽度
+    // 计算容器宽度 + 自适应缩放
     if (scrollRef.current) {
       const w = Math.round(scrollRef.current.clientWidth - 32)
-      if (w > 100) setContainerWidth(w)
+      if (w > 100) {
+        setContainerWidth(w)
+        // 自动计算缩放比例，让页面适配宽度
+        try {
+          const pageObj = await pdf.getPage(1)
+          const vp = pageObj.getViewport({ scale: 1 })
+          const fit = Math.max(0.5, Math.min(2, parseFloat((w / vp.width).toFixed(2))))
+          setScale(fit)
+        } catch {}
+      }
     }
   }, [])
 
@@ -316,7 +335,6 @@ export default function Reader({ book, onPageChange, onBack }) {
                     <Page
                       pageNumber={p}
                       scale={scale}
-                      width={containerWidth || 800}
                       renderTextLayer={true}
                       renderAnnotationLayer={false}
                     />
