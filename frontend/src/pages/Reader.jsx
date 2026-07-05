@@ -160,10 +160,10 @@ export default function Reader({ book, onPageChange, onBack }) {
         } catch { heights.push(600) }
       }
       if (cancelled) return
-      let accum = 4
+      let accum = 0
       const offsets = heights.map(h => {
         const o = accum
-        accum += h + 2
+        accum += h
         return o
       })
       setPageOffsets(offsets)
@@ -264,12 +264,8 @@ export default function Reader({ book, onPageChange, onBack }) {
     return pages
   })(scrollPos)  // eslint-disable-line no-unused-expressions
 
-  // 最后一项偏移 + 页高度 + 底部边距 = 总滚动高度
-  const totalHeight = (() => {
-    if (!pageOffsets.length || !pdfRef.current || !scrollRef.current) return 0
-    const lastH = scrollRef.current.clientHeight  // 至少一屏高
-    return pageOffsets[pageOffsets.length - 1] + lastH
-  })()
+  // 总滚动高度 = 末页起始 + 末页估算高度
+  const totalHeight = pageOffsets.length > 0 ? pageOffsets[pageOffsets.length - 1] + scrollRef.current?.clientHeight * 1.5 || 2000 : 0
 
   const renderChapters = (items, indent, curPage, onGo) => {
     return items.map((ch, i) => (
