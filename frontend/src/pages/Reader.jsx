@@ -170,7 +170,7 @@ export default function Reader({ book, onPageChange, onBack }) {
       let accum = 0
       const offsets = heights.map(h => {
         const o = accum
-        accum += h
+        accum += h + 12
         return o
       })
       setPageOffsets(offsets)
