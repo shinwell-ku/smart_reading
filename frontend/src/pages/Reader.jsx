@@ -44,6 +44,7 @@ export default function Reader({ book, onPageChange, onBack }) {
         try {
           let restoredPage = 1
           try { const p = await api.getProgress(book.id); if (p?.current_page > 1) restoredPage = p.current_page } catch {}
+          pageRef.current = restoredPage  // 同步 ref，供后续滚动恢复使用
           setPage(restoredPage)
           onPageChange(restoredPage)
           setNumPages(book.total_pages || 0)
@@ -61,6 +62,7 @@ export default function Reader({ book, onPageChange, onBack }) {
         try {
           let restoredPage = 1
           try { const p = await api.getProgress(book.id); if (p?.current_page > 1) restoredPage = p.current_page } catch {}
+          pageRef.current = restoredPage
           setPage(restoredPage)
           onPageChange(restoredPage)
           const resp = await fetch(`http://127.0.0.1:5001/api/books/${book.id}/file`)
