@@ -37,9 +37,25 @@ console.log(`[主进程] 数据目录: ${DATA_DIR}`);
 // Python 后端管理
 // ============================================================
 
+function fixPyvenvConfig() {
+  // 修正 pyvenv.cfg 中的 home 路径，使其指向打包后的 venv 实际位置
+  const pyvenvPath = path.join(BACKEND_DIR, '.venv', 'pyvenv.cfg');
+  if (!fs.existsSync(pyvenvPath)) return;
+  try {
+    const venvBinDir = path.join(BACKEND_DIR, '.venv', 'bin');
+    let content = fs.readFileSync(pyvenvPath, 'utf-8');
+    content = content.replace(/^home = .*/m, `home = ${venvBinDir}`);
+    fs.writeFileSync(pyvenvPath, content, 'utf-8');
+    console.log(`[主进程] pyvenv.cfg home 已修正: ${venvBinDir}`);
+  } catch (e) {
+    console.error('[主进程] pyvenv.cfg 修正失败:', e);
+  }
+}
+
 function getPythonCommand() {
-  // 生产模式（已打包）：使用打包的 venv
+  // 生产模式（已打包）：修正 pyvenv.cfg + 使用打包的 venv
   if (isPackaged) {
+    fixPyvenvConfig();
     const bundledPython = path.join(BACKEND_DIR, '.venv', process.platform === 'win32' ? 'Scripts\\python.exe' : 'bin/python3');
     if (fs.existsSync(bundledPython)) {
       return bundledPython;
