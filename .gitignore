@@ -14,7 +14,7 @@ frontend/node_modules/
 
 # Build output
 frontend/dist/
-frontend/dist/
+frontend/release/
 frontend/build-resources/
 frontend/src/lib/echarts.min.js
 frontend/build/resources/logo_topbar.png

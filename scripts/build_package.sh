@@ -87,5 +87,5 @@ esac
 rm -rf "$RES_DIR"
 
 echo ""
-echo "✅ 构建完成！安装包位于: frontend/dist/"
+echo "✅ 构建完成！安装包位于: frontend/release/"
 echo "=============================="

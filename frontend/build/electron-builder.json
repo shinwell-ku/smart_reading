@@ -2,7 +2,7 @@
   "appId": "com.smartreading.ai",
   "productName": "AI智慧阅读",
   "directories": {
-    "output": "dist",
+    "output": "release",
     "buildResources": "resources"
   },
   "files": [
