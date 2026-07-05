@@ -7,6 +7,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 // 后端 API 基础地址
 const API_BASE = 'http://127.0.0.1:5001';
 
+// 通知渲染进程后端已就绪
+ipcRenderer.on('backend-ready', () => {
+  // 触发自定义事件，App.jsx 通过监听此事件刷新后端状态
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('backend-ready'));
+  }
+});
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // ─── 文件操作 ───
   openFileDialog: (options) => ipcRenderer.invoke('dialog:openFile', options),

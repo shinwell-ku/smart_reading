@@ -28,9 +28,11 @@ export default function App() {
     const timer = setInterval(check, 5000)
     const keydown = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'r') { e.preventDefault(); location.reload() } }
     const togglePanel = () => setPanelCollapsed(v => !v)
+    const onBackendReady = () => { setTimeout(check, 500) } // 后端就绪后立即检测
     document.addEventListener('keydown', keydown)
     window.addEventListener('toggle-panel', togglePanel)
-    return () => { clearInterval(timer); document.removeEventListener('keydown', keydown); window.removeEventListener('toggle-panel', togglePanel) }
+    window.addEventListener('backend-ready', onBackendReady)
+    return () => { clearInterval(timer); document.removeEventListener('keydown', keydown); window.removeEventListener('toggle-panel', togglePanel); window.removeEventListener('backend-ready', onBackendReady) }
   }, [])
 
   const openBook = useCallback((book) => {

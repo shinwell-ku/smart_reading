@@ -316,14 +316,20 @@ app.whenReady().then(async () => {
   // 移除默认菜单栏
   Menu.setApplicationMenu(null);
 
-  // 启动 Python 后端
+  // 先显示窗口，再异步启动后端（避免用户干等）
+  createMainWindow();
+
+  // 异步启动 Python 后端
   try {
     await startPythonBackend();
   } catch (e) {
     console.error('[主进程] 后端启动失败:', e);
   }
 
-  createMainWindow();
+  // 通知渲染进程后端已就绪
+  if (mainWindow) {
+    mainWindow.webContents.send('backend-ready');
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
