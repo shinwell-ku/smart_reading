@@ -134,10 +134,10 @@ export default function Reader({ book, onPageChange, onBack }) {
         } catch { heights.push(800) }
       }
       // 计算累计偏移
-      let accum = 16  // 顶部间距
+      let accum = 24  // 顶部间距
       const offsets = heights.map(h => {
         const o = accum
-        accum += h + 12  // 页间距
+        accum += h + 32  // 页间距（含阴影空间）
         return o
       })
       setPageOffsets(offsets)
