@@ -21,7 +21,7 @@ export default function Reader({ book, onPageChange, onBack }) {
   const pageRef = useRef(page)
   pageRef.current = page
   const pdfRef = useRef(null)
-  const [containerWidth, setContainerWidth] = useState(0)
+  const [containerWidth, setContainerWidth] = useState(null)
 
   const isDocx = book?.file_type === 'docx'
   const chapters = book?.chapters || []
@@ -134,11 +134,11 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
   }, [])
 
-  // 测量各页高度（基于实际渲染宽度计算，而非 scale）
+  // 测量各页高度（与 Page 渲染宽度一致）
   useEffect(() => {
-    if (!pdfRef.current || !numPages || !scrollRef.current) return
-    const renderWidth = scrollRef.current.clientWidth - 48
-    if (renderWidth < 100) return
+    if (!pdfRef.current || !numPages) return
+    const w = containerWidth || (scrollRef.current?.clientWidth ? scrollRef.current.clientWidth - 48 : 800)
+    if (w < 100) return
     let cancelled = false
     ;(async () => {
       const heights = []
@@ -147,8 +147,7 @@ export default function Reader({ book, onPageChange, onBack }) {
         try {
           const p = await pdfRef.current.getPage(i)
           const vp = p.getViewport({ scale: 1 })
-          // 实际渲染高度 = 页面自然比例 × 渲染宽度
-          const pageHeight = vp.height * (renderWidth / vp.width)
+          const pageHeight = vp.height * (w / vp.width)
           heights.push(pageHeight)
         } catch { heights.push(600) }
       }
@@ -156,7 +155,7 @@ export default function Reader({ book, onPageChange, onBack }) {
       let accum = 8
       const offsets = heights.map(h => {
         const o = accum
-        accum += h + 5  // 页间距
+        accum += h + 5
         return o
       })
       setPageOffsets(offsets)
@@ -328,7 +327,7 @@ export default function Reader({ book, onPageChange, onBack }) {
                     <Page
                       pageNumber={p}
                       scale={scale}
-                      width={containerWidth || undefined}
+                      width={containerWidth || 800}
                       renderTextLayer={true}
                       renderAnnotationLayer={false}
                     />

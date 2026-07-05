@@ -11,7 +11,6 @@ const { spawn } = require('child_process');
 // 全局状态
 // ============================================================
 let mainWindow = null;
-let splashWindow = null;
 let pythonProcess = null;
 const isDev = process.argv.includes('--dev');
 const isPackaged = app.isPackaged;
@@ -214,41 +213,6 @@ function createMainWindow() {
   });
 }
 
-function showSplash() {
-  splashWindow = new BrowserWindow({
-    width: 480,
-    height: 320,
-    frame: false,
-    resizable: false,
-    show: true,
-    backgroundColor: '#f5f5f5',
-    webPreferences: { sandbox: true }
-  });
-  splashWindow.loadURL(`data:text/html;charset=utf-8,
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"><style>
-      body { margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-             height:100vh; background:linear-gradient(135deg,#1a1a40,#4a3f7a); color:#fff;
-             font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-      .icon { font-size:56px; margin-bottom:12px; }
-      h1 { font-size:20px; font-weight:600; margin:0 0 4px; }
-      p { font-size:13px; opacity:0.7; margin:0 0 24px; }
-      .bar { width:200px; height:3px; background:rgba(255,255,255,0.15); border-radius:2px; overflow:hidden; }
-      .bar::after { content:""; display:block; width:40%; height:100%; background:#fff; border-radius:2px;
-                    animation:load 1.2s ease-in-out infinite; }
-      @keyframes load { 0%{transform:translateX(-100%)} 100%{transform:translateX(350%)} }
-    </style></head>
-    <body>
-      <div class="icon">📚</div>
-      <h1>AI智慧阅读</h1>
-      <p>正在启动服务...</p>
-      <div class="bar"></div>
-    </body>
-    </html>
-  `);
-}
-
 // ============================================================
 // IPC 处理器
 // ============================================================
@@ -352,27 +316,20 @@ app.whenReady().then(async () => {
   // 移除默认菜单栏
   Menu.setApplicationMenu(null);
 
-  // 先显示启动画面
-  showSplash();
-
-  // 启动 Python 后端
+  // 先启动 Python 后端
   try {
     await startPythonBackend();
   } catch (e) {
     console.error('[主进程] 后端启动失败:', e);
   }
 
-  // 后端就绪，加载主界面并通知渲染进程
+  // 后端就绪后创建窗口
   createMainWindow();
+  // 通知渲染进程后端已就绪
   if (mainWindow) {
     mainWindow.webContents.on('did-finish-load', () => {
       mainWindow.webContents.send('backend-ready');
     });
-  }
-  // 关闭启动窗口
-  if (splashWindow) {
-    splashWindow.close();
-    splashWindow = null;
   }
 
   app.on('activate', () => {
