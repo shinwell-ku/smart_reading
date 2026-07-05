@@ -1,5 +1,5 @@
 {
-  "mode": "local",
+  "mode": "remote",
   "remote": {
     "provider": "openai",
     "api_base": "https://api.openai.com/v1",

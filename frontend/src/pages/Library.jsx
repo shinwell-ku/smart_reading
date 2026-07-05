@@ -8,7 +8,23 @@ export default function Library({ onOpenBook }) {
   const [search, setSearch] = useState('')
   const [importing, setImporting] = useState(false)
 
-  useEffect(() => { loadBooks() }, [])
+  useEffect(() => {
+    // 首次加载 + 重试（后端起不来时每隔 3 秒重试一次）
+    const tryLoad = async () => {
+      for (let i = 0; i < 10; i++) {
+        try {
+          const r = await api.listBooks()
+          if (r.books) { setBooks(r.books); return }
+        } catch {}
+        await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+    tryLoad()
+    // 后端就绪事件触发立即刷新
+    const h = () => tryLoad()
+    window.addEventListener('backend-ready', h)
+    return () => window.removeEventListener('backend-ready', h)
+  }, [])
 
   const loadBooks = async () => {
     try { const r = await api.listBooks(); setBooks(r.books || []) } catch {}
