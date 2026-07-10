@@ -37,6 +37,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [noteColor, setNoteColor] = useState('#FFD700')
   const [bookmarks, setBookmarks] = useState([])
   const [words, setWords] = useState([])
+  const [wordRefresh, setWordRefresh] = useState(0)
   const [editingBmId, setEditingBmId] = useState(null)
   const [editingBmTitle, setEditingBmTitle] = useState('')
   const [graphExists, setGraphExists] = useState(false)
@@ -73,12 +74,17 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     return () => window.removeEventListener('refresh-bookmarks', h)
   }, [book])
 
-  // 切到标签时自动加载数据
+  // 切到知识图谱时自动加载
   useEffect(() => {
-    if (!book) return
-    if (activeTab === 'knowledge') loadGraph(book.id)
-    if (activeTab === 'vocabulary') api.getWords(book.id).then(r => setWords(r.words || [])).catch(() => {})
+    if (activeTab === 'knowledge' && book) loadGraph(book.id)
   }, [activeTab, book])
+
+  // 生词标签激活时 + 翻译后自动刷新
+  useEffect(() => {
+    if (activeTab === 'vocabulary' && book) {
+      api.getWords(book.id).then(r => setWords(r.words || [])).catch(() => {})
+    }
+  }, [activeTab, book, wordRefresh])
 
   // 组件卸载时清理后台轮询
   useEffect(() => {
@@ -97,7 +103,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       // 自动保存生词
       if (r.translated_text && book) {
         api.saveWord({ book_id: book.id, word: t.slice(0, 100), translation: r.translated_text.slice(0, 200), page_num: page }).then(() => {
-          api.getWords(book.id).then(r => setWords(r.words || [])).catch(() => {})
+          setWordRefresh(n => n + 1)
         }).catch(() => {})
       }
     } catch (e) { setResultText('翻译失败: ' + (e.message || '')) }
