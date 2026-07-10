@@ -338,7 +338,6 @@ export default function Reader({ book, onPageChange, onBack }) {
         <div className={`outline-item ${ch.page === curPage ? 'active' : ''}`}
           style={{ paddingLeft: 12 + indent * 16 }}
           onClick={() => onGo(ch.page)}>
-          <span style={{ fontSize: 11, color: '#909399', marginRight: 4 }}>第{ch.page}页</span>
           <span>{ch.title}</span>
         </div>
         {ch.children?.length > 0 && renderChapters(ch.children, indent + 1, curPage, onGo)}

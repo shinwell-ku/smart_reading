@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message, notification } from 'antd'
-import { DeleteOutlined, ApartmentOutlined, StarOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
   if (!text) return ''
@@ -21,6 +21,7 @@ const TABS = [
   { key: 'translate', label: '翻译', icon: '🌐' },
   { key: 'notes', label: '笔记', icon: '📝' },
   { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
+  { key: 'search', label: '搜索', icon: <SearchOutlined /> },
   { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
 ]
 
@@ -37,6 +38,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [editingBmId, setEditingBmId] = useState(null)
   const [editingBmTitle, setEditingBmTitle] = useState('')
   const [graphExists, setGraphExists] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searching, setSearching] = useState(false)
   const [graphData, setGraphData] = useState(null)
   const [graphLayout, setGraphLayout] = useState('force')
   const [graphLabels, setGraphLabels] = useState('auto')
@@ -288,6 +292,45 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }} />
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        {activeTab === 'search' && (
+          <div className="panel-body" style={{ flex: 1 }}>
+            <Input.Search
+              placeholder="搜索当前文档..." value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              loading={searching}
+              onSearch={async (val) => {
+                if (!book || !val.trim()) return
+                setSearching(true)
+                try {
+                  const r = await api.search(book.id, val.trim())
+                  setSearchResults(r.results || [])
+                } catch { message.error('搜索失败') }
+                setSearching(false)
+              }}
+            />
+            <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
+              {searchResults.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>输入关键词搜索全文</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 11, color: '#909399', marginBottom: 6 }}>共 {searchResults.length} 条结果</div>
+                  {searchResults.map((r, i) => {
+                    const page = Math.ceil((r.line || i) / 40) || 1
+                    return (
+                      <div key={i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, cursor: 'pointer', background: '#fafafa' }}
+                        onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: page }))}>
+                        <div style={{ color: '#1677ff', marginBottom: 4 }}>第{page}页 · 行{r.line || i + 1}</div>
+                        <div style={{ color: '#606266', lineHeight: 1.6, wordBreak: 'break-all' }} dangerouslySetInnerHTML={{
+                          __html: (r.context || r.matched || '').replace(new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<span style="background:#ffd43b;padding:0 2px">${m}</span>`)
+                        }} />
+                      </div>
+                    )
+                  })}
+                </>
+              )}
             </div>
           </div>
         )}

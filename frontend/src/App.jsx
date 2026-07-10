@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Modal } from 'antd'
-import { ApartmentOutlined, StarOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, StarOutlined, SearchOutlined } from '@ant-design/icons'
 import { api } from './api'
 import Library from './pages/Library'
 import Reader from './pages/Reader'
@@ -50,7 +50,7 @@ export default function App() {
 
   const handleMenu = (tab) => {
     if (tab === 'reader' && !currentBook) return
-    if (['translate', 'notes', 'bookmarks', 'knowledge'].includes(tab)) {
+    if (['translate', 'notes', 'bookmarks', 'search', 'knowledge'].includes(tab)) {
       if (!currentBook) return
       setActiveTab('reader')
       setSideTab(tab)
@@ -133,6 +133,7 @@ export default function App() {
                     { key: 'translate', label: '翻译', icon: '🌐' },
                     { key: 'notes', label: '笔记', icon: '📝' },
                     { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
+                    { key: 'search', label: '搜索', icon: <SearchOutlined /> },
                     { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
                   ].map(tab => (
                     <div key={tab.key}
