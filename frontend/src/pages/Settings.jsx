@@ -34,35 +34,6 @@ export default function Settings() {
   const [fontSize, setFontSize] = useState(parseInt(localStorage.getItem('sr_fontSize') || '16'))
   const [lineHeight, setLineHeight] = useState(localStorage.getItem('sr_lineHeight') || '1.8')
   const [eyeCare, setEyeCare] = useState(localStorage.getItem('sr_eyeCare') === 'true')
-  const [theme, setTheme] = useState(localStorage.getItem('sr_theme') || 'light')
-
-  // 应用主题
-  const applyTheme = (t) => {
-    document.body.classList.remove('dark-mode', 'theme-system', 'theme-light')
-    if (t === 'dark') document.body.classList.add('dark-mode')
-    else if (t === 'system') document.body.classList.add('theme-system')
-    localStorage.setItem('sr_theme', t)
-  }
-
-  const toggleTheme = (t) => {
-    setTheme(t)
-    applyTheme(t)
-  }
-
-  // 首次加载时应用已保存的主题
-  useEffect(() => { applyTheme(theme) }, [])
-
-  // 跟随系统模式：监听系统主题变化
-  useEffect(() => {
-    if (theme !== 'system') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (e) => {
-      document.body.classList.toggle('dark-mode', e.matches)
-    }
-    handler(mq)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [theme])
 
   const [mode, setMode] = useState('local')
   const [provider, setProvider] = useState('openai')
@@ -158,14 +129,6 @@ export default function Settings() {
           </Form.Item>
           <Form.Item label="护眼模式">
             <Switch checked={eyeCare} onChange={toggleEyeCare} />
-          </Form.Item>
-          <Form.Item label="主题">
-            <Radio.Group value={theme} onChange={e => toggleTheme(e.target.value)}>
-              <Radio value="light">日间</Radio>
-              <Radio value="dark">夜间</Radio>
-              <Radio value="system">跟随系统</Radio>
-            </Radio.Group>
-          </Form.Item>
           </Form.Item>
         </Form>
       </Card>
