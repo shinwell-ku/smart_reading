@@ -52,10 +52,10 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const pollRef = useRef(null)
 
   useEffect(() => {
-    const h = (e) => { if (e.detail) setSourceText(cleanText(e.detail.slice(0, 5000))) }
+    const h = (e) => { if (e.detail && activeTab === 'translate') setSourceText(cleanText(e.detail.slice(0, 5000))) }
     window.addEventListener('pdf-selection', h)
     return () => window.removeEventListener('pdf-selection', h)
-  }, [])
+  }, [activeTab])
 
   useEffect(() => {
     if (!book) return
@@ -318,7 +318,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <>
                   <div style={{ fontSize: 11, color: '#909399', marginBottom: 6 }}>共 {searchResults.length} 条结果</div>
                   {searchResults.map((r, i) => {
-                    const page = Math.ceil((r.line || i) / 40) || 1
+                    const page = r.page || Math.ceil((r.line || i) / 40) || 1
                     return (
                       <div key={i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, cursor: 'pointer', background: '#fafafa' }}
                         onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: page }))}>
