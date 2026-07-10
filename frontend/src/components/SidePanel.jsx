@@ -204,14 +204,15 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   // Language options
   const langOpts = [
     { value: 'auto', label: '自动检测' }, { value: 'zh', label: '中文' },
-    { value: 'en', label: 'English (中文)' }, { value: 'ja', label: '日本語 (中文)' },
-    { value: 'ko', label: '한국어 (中文)' }, { value: 'fr', label: 'Français (中文)' },
-    { value: 'de', label: 'Deutsch (中文)' }, { value: 'es', label: 'Español (中文)' },
-    { value: 'ru', label: 'Русский (中文)' }, { value: 'pt', label: 'Português (中文)' },
-    { value: 'it', label: 'Italiano (中文)' }, { value: 'nl', label: 'Nederlands (中文)' },
-    { value: 'pl', label: 'Polski (中文)' }, { value: 'tr', label: 'Türkçe (中文)' },
-    { value: 'vi', label: 'Tiếng Việt (中文)' }, { value: 'th', label: 'ไทย (中文)' },
-    { value: 'ar', label: 'العربية (中文)' }, { value: 'hi', label: 'हिन्दी (中文)' },
+    { value: 'en', label: 'English (英语)' }, { value: 'ja', label: '日本語 (日语)' },
+    { value: 'ko', label: '한국어 (韩语)' }, { value: 'fr', label: 'Français (法语)' },
+    { value: 'de', label: 'Deutsch (德语)' }, { value: 'es', label: 'Español (西班牙语)' },
+    { value: 'ru', label: 'Русский (俄语)' }, { value: 'pt', label: 'Português (葡萄牙语)' },
+    { value: 'it', label: 'Italiano (意大利语)' }, { value: 'nl', label: 'Nederlands (荷兰语)' },
+    { value: 'pl', label: 'Polski (波兰语)' }, { value: 'tr', label: 'Türkçe (土耳其语)' },
+    { value: 'vi', label: 'Tiếng Việt (越南语)' }, { value: 'th', label: 'ไทย (泰语)' },
+    { value: 'ar', label: 'العربية (阿拉伯语)' }, { value: 'hi', label: 'हिन्दी (印地语)' },
+    { value: 'mn', label: 'Монгол (蒙古语)' },
   ]
 
   return (
@@ -221,9 +222,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         {activeTab === 'translate' && (
           <div className="panel-body" style={{ flex: 1 }}>
             <div className="panel-controls">
-              <Select value={sourceLang} onChange={setSourceLang} size="small" style={{ width: 100 }} options={langOpts} />
+              <Select value={sourceLang} onChange={setSourceLang} size="small" style={{ width: 140 }} options={langOpts} />
               <Button size="small" onClick={() => { const s = sourceLang; const t = targetLang === 'auto' ? 'en' : targetLang; setSourceLang(t); setTargetLang(s === 'auto' ? 'en' : s) }}>⇄</Button>
-              <Select value={targetLang} onChange={setTargetLang} size="small" style={{ width: 100 }} options={langOpts.filter(o => o.value !== 'auto')} />
+              <Select value={targetLang} onChange={setTargetLang} size="small" style={{ width: 140 }} options={langOpts.filter(o => o.value !== 'auto')} />
               <Button type="primary" size="small" onClick={translate} loading={translating}>翻译</Button>
               <Button size="small" onClick={fillPageText}>当前页</Button>
               <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>清除</Button>

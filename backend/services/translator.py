@@ -50,6 +50,7 @@ class TranslatorService:
             'id': '印尼语',
             'hi': '印地语',
             'ms': '马来语',
+            'mn': '蒙古语',
             'auto': '自动检测'
         }
 
@@ -73,6 +74,7 @@ class TranslatorService:
             'th': 'tha_Thai',
             'id': 'ind_Latn',
             'hi': 'hin_Deva',
+            'mn': 'khk_Cyrl',
         }
 
     def _load_model(self):

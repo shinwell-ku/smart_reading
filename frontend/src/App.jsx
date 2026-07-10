@@ -16,7 +16,7 @@ export default function App() {
   const [sideTab, setSideTab] = useState('translate')
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
-  const [panelWidth, setPanelWidth] = useState(480)
+  const [panelWidth, setPanelWidth] = useState(520)
   const panelRef = useRef(null)
   const dragRef = useRef(null)
 
@@ -104,7 +104,7 @@ export default function App() {
                   const onMove = (ev) => {
                     const newW = startW - (ev.clientX - startX);
                     const maxW = window.innerWidth / 2;
-                    setPanelWidth(Math.max(420, Math.min(maxW, newW)));
+                    setPanelWidth(Math.max(520, Math.min(maxW, newW)));
                   };
                   const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
                   document.addEventListener('mousemove', onMove);
