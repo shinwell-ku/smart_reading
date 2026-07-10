@@ -83,8 +83,9 @@ case "$1" in
   *) echo "用法: $0 [win|mac|all]"; exit 1 ;;
 esac
 
-# 构建完成后清理 build-resources
+# 构建完成后清理 build-resources 及中间产物
 rm -rf "$RES_DIR"
+rm -rf "$DIR/frontend/release/mac"
 
 echo ""
 echo "✅ 构建完成！安装包位于: frontend/release/"
