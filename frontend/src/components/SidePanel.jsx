@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message, notification } from 'antd'
-import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
   if (!text) return ''
@@ -19,6 +19,7 @@ function cleanText(text) {
 
 const TABS = [
   { key: 'translate', label: '翻译', icon: '🌐' },
+  { key: 'vocabulary', label: '生词', icon: <BookOutlined /> },
   { key: 'notes', label: '笔记', icon: '📝' },
   { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
   { key: 'search', label: '搜索', icon: <SearchOutlined /> },
@@ -35,6 +36,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [noteText, setNoteText] = useState('')
   const [noteColor, setNoteColor] = useState('#FFD700')
   const [bookmarks, setBookmarks] = useState([])
+  const [words, setWords] = useState([])
   const [editingBmId, setEditingBmId] = useState(null)
   const [editingBmTitle, setEditingBmTitle] = useState('')
   const [graphExists, setGraphExists] = useState(false)
@@ -61,6 +63,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     if (!book) return
     api.getNotes(book.id).then(r => setNotes(r.notes || [])).catch(() => {})
     api.getBookmarks(book.id).then(r => setBookmarks(r.bookmarks || [])).catch(() => {})
+    api.getWords(book.id).then(r => setWords(r.words || [])).catch(() => {})
     loadGraph(book.id)
   }, [book])
 
@@ -89,6 +92,10 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       const r = await api.translate({ text: t, source_lang: sourceLang, target_lang: targetLang })
       if (r.error) { setResultText('翻译失败: ' + r.error); return }
       setResultText(r.translated_text || '翻译失败')
+      // 自动保存生词
+      if (r.translated_text && book) {
+        api.saveWord({ book_id: book.id, word: t.slice(0, 100), translation: r.translated_text.slice(0, 200), page_num: page }).catch(() => {})
+      }
     } catch (e) { setResultText('翻译失败: ' + (e.message || '')) }
     setTranslating(false)
   }
@@ -235,6 +242,28 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             </div>
             <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="选中文本后自动填充或点当前页" />
             <Input.TextArea className="panel-textarea" value={resultText} readOnly placeholder="翻译结果" />
+          </div>
+        )}
+        {activeTab === 'vocabulary' && (
+          <div className="panel-body" style={{ flex: 1 }}>
+            <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto' }}>
+              {words.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>暂无生词，翻译时会自动记录</div>
+              ) : (
+                words.map((w, i) => (
+                  <div key={w.id || i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12 }}>
+                    <div style={{ fontWeight: 600, color: '#303133', marginBottom: 2 }}>{w.word}</div>
+                    <div style={{ color: '#1677ff', marginBottom: 2 }}>{w.translation}</div>
+                    {w.page_num > 0 && (
+                      <div style={{ color: '#909399', fontSize: 11, cursor: 'pointer' }}
+                        onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: w.page_num }))}>
+                        第{w.page_num}页 →
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
         {activeTab === 'notes' && (

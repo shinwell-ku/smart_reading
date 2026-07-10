@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Modal } from 'antd'
-import { ApartmentOutlined, StarOutlined, SearchOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons'
 import { api } from './api'
 import Library from './pages/Library'
 import Reader from './pages/Reader'
@@ -50,7 +50,7 @@ export default function App() {
 
   const handleMenu = (tab) => {
     if (tab === 'reader' && !currentBook) return
-    if (['translate', 'notes', 'bookmarks', 'search', 'knowledge'].includes(tab)) {
+    if (['translate', 'vocabulary', 'notes', 'bookmarks', 'search', 'knowledge'].includes(tab)) {
       if (!currentBook) return
       setActiveTab('reader')
       setSideTab(tab)
@@ -131,6 +131,7 @@ export default function App() {
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   {[
                     { key: 'translate', label: '翻译', icon: '🌐' },
+                    { key: 'vocabulary', label: '生词', icon: <BookOutlined /> },
                     { key: 'notes', label: '笔记', icon: '📝' },
                     { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
                     { key: 'search', label: '搜索', icon: <SearchOutlined /> },
