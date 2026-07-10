@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api'
-import { Card, Button, message, Modal, Switch, Slider, Select, Input, Radio, Form, Space, Divider } from 'antd'
+import { Button, message, Modal, Switch, Slider, Select, Input, Radio, Form, Space, Divider, Tabs } from 'antd'
 
 const PROVIDER_OPTIONS = [
   { group: '国内',
@@ -28,7 +28,6 @@ const PROVIDER_OPTIONS = [
 ]
 
 const GROUPED_OPTIONS = PROVIDER_OPTIONS.flatMap(g => g.items)
-const flatOptions = PROVIDER_OPTIONS.flatMap(g => g.items.map(i => ({ ...i, _group: g.group })))
 
 export default function Settings({ open, onClose }) {
   const [eyeCare, setEyeCare] = useState(localStorage.getItem('sr_eyeCare') === 'true')
@@ -104,74 +103,85 @@ export default function Settings({ open, onClose }) {
 
   return (
     <Modal title="设置" open={open} onCancel={onClose} footer={null} width={640} centered>
-    <div className="settings-view">
-        <Form layout="inline" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <Form.Item label="护眼模式">
-            <Switch checked={eyeCare} onChange={toggleEyeCare} />
-          </Form.Item>
-        </Form>
-      </Card>
+      <Tabs
+        items={[
+          {
+            key: 'reading',
+            label: '阅读',
+            children: (
+              <Form layout="inline" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <Form.Item label="护眼模式">
+                  <Switch checked={eyeCare} onChange={toggleEyeCare} />
+                </Form.Item>
+              </Form>
+            ),
+          },
+          {
+            key: 'translate',
+            label: '翻译模型',
+            children: configLoaded ? (
+              <Form layout="vertical" size="small">
+                <Form.Item label="翻译引擎">
+                  <Radio.Group value={mode} onChange={e => setMode(e.target.value)}>
+                    <Radio value="local">本地模型</Radio>
+                    <Radio value="remote">远程 LLM</Radio>
+                  </Radio.Group>
+                </Form.Item>
 
-      <Card title="翻译模型" size="small" style={{ marginBottom: 16 }}>
-        {configLoaded && (
-          <Form layout="vertical" size="small">
-            <Form.Item label="翻译引擎">
-              <Radio.Group value={mode} onChange={e => setMode(e.target.value)}>
-                <Radio value="local">本地模型</Radio>
-                <Radio value="remote">远程 LLM</Radio>
-              </Radio.Group>
-            </Form.Item>
+                {mode === 'remote' && (
+                  <>
+                    <Divider style={{ margin: '8px 0' }} />
+                    <Form.Item label="厂商">
+                      <Select value={provider} onChange={handleProviderChange} style={{ width: 280 }}
+                        options={PROVIDER_OPTIONS.map(g => ({
+                          label: g.group, options: g.items.map(i => ({ value: i.value, label: i.label }))
+                        }))} />
+                    </Form.Item>
+                    <Form.Item label="接口地址">
+                      <Input value={apiBase} onChange={e => setApiBase(e.target.value)} placeholder="https://api.openai.com/v1" style={{ width: 400 }} />
+                    </Form.Item>
+                    <Form.Item label="API Key">
+                      <Input.Password value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." style={{ width: 400 }} />
+                    </Form.Item>
+                    <Form.Item label="模型名">
+                      <Input value={model} onChange={e => setModel(e.target.value)} placeholder="gpt-4o-mini" style={{ width: 280 }} />
+                    </Form.Item>
+                    <Form.Item label="Max Tokens">
+                      <Slider min={256} max={16384} step={256} value={maxTokens} onChange={setMaxTokens} style={{ width: 280 }} />
+                    </Form.Item>
+                    <Form.Item label="Temperature">
+                      <Space>
+                        <Slider min={0} max={1} step={0.1} value={temperature} onChange={setTemperature} style={{ width: 200 }} />
+                        <span style={{ fontSize: 12, color: '#909399', minWidth: 24 }}>{temperature}</span>
+                      </Space>
+                    </Form.Item>
+                  </>
+                )}
 
-            {mode === 'remote' && (
-              <>
-                <Divider style={{ margin: '8px 0' }} />
-                <Form.Item label="厂商">
-                  <Select value={provider} onChange={handleProviderChange} style={{ width: 280 }}
-                    options={PROVIDER_OPTIONS.map(g => ({
-                      label: g.group, options: g.items.map(i => ({ value: i.value, label: i.label }))
-                    }))} />
+                <Form.Item>
+                  <Button type="primary" onClick={saveTranslatorConfig}>保存配置</Button>
                 </Form.Item>
-                <Form.Item label="接口地址">
-                  <Input value={apiBase} onChange={e => setApiBase(e.target.value)} placeholder="https://api.openai.com/v1" style={{ width: 400 }} />
-                </Form.Item>
-                <Form.Item label="API Key">
-                  <Input.Password value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." style={{ width: 400 }} />
-                </Form.Item>
-                <Form.Item label="模型名">
-                  <Input value={model} onChange={e => setModel(e.target.value)} placeholder="gpt-4o-mini" style={{ width: 280 }} />
-                </Form.Item>
-                <Form.Item label="Max Tokens">
-                  <Slider min={256} max={16384} step={256} value={maxTokens} onChange={setMaxTokens} style={{ width: 280 }} />
-                </Form.Item>
-                <Form.Item label="Temperature">
-                  <Space>
-                    <Slider min={0} max={1} step={0.1} value={temperature} onChange={setTemperature} style={{ width: 200 }} />
-                    <span style={{ fontSize: 12, color: '#909399', minWidth: 24 }}>{temperature}</span>
-                  </Space>
-                </Form.Item>
-              </>
-            )}
-
-            <Form.Item>
-              <Button type="primary" onClick={saveTranslatorConfig}>保存配置</Button>
-            </Form.Item>
-          </Form>
-        )}
-      </Card>
-
-      <Card title="数据管理" size="small">
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13 }}>备份当前所有数据</span>
-            <Button size="small" onClick={doBackup}>创建备份</Button>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, color: '#f56c6c' }}>清除所有数据（不可恢复）</span>
-            <Button size="small" danger onClick={doReset}>清除所有数据</Button>
-          </div>
-        </Space>
-      </Card>
-    </div>
+              </Form>
+            ) : null,
+          },
+          {
+            key: 'data',
+            label: '数据管理',
+            children: (
+              <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13 }}>备份当前所有数据</span>
+                  <Button size="small" onClick={doBackup}>创建备份</Button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, color: '#f56c6c' }}>清除所有数据（不可恢复）</span>
+                  <Button size="small" danger onClick={doReset}>清除所有数据</Button>
+                </div>
+              </Space>
+            ),
+          },
+        ]}
+      />
     </Modal>
   )
 }
