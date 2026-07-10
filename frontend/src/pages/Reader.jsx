@@ -392,6 +392,7 @@ export default function Reader({ book, onPageChange, onBack }) {
           {!loading && !isDocx && pdfData && (
             <Document
               file={pdfData}
+              loading={<div style={{ padding: 40, color: '#909399', textAlign: 'center' }}>📖 正在加载 PDF...</div>}
               onLoadSuccess={onLoadSuccess}
               onLoadError={(e) => { console.error('PDF error:', e); message.error(`PDF加载失败`) }}
             >
