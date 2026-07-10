@@ -117,6 +117,6 @@ def save_word():
 @translation_bp.route('/words/<int:book_id>', methods=['GET'])
 def get_words(book_id):
     db = get_db()
-    words = db.query(Vocabulary).filter_by(book_id=book_id).order_by(Vocabulary.created_at.desc()).all()
+    words = db.query(Vocabulary).filter_by(book_id=book_id).order_by(Vocabulary.id.desc()).all()
     items = [WordResponse.model_validate(w) for w in words]
     return jsonify(WordListResponse(words=items).model_dump())

@@ -28,6 +28,8 @@ dependencies = [
     "paddlepaddle>=2.6.0",
     "paddleocr>=2.7.0",
     "openai>=2.44.0",
+    "onnxruntime>=1.20.1",
+    "piper-phonemize>=1.1.0",
 ]
 
 [tool.uv]

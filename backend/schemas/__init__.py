@@ -225,7 +225,7 @@ class SearchResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = 'ok'
-    service: str = 'ai-smart-reading'
+    service: str = 'smart-reading'
 
 
 class MessageResponse(BaseModel):
