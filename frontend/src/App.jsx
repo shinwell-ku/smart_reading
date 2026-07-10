@@ -16,6 +16,7 @@ export default function App() {
   const [sideTab, setSideTab] = useState('translate')
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [panelWidth, setPanelWidth] = useState(520)
   const panelRef = useRef(null)
   const dragRef = useRef(null)
@@ -72,7 +73,7 @@ export default function App() {
         </div>
         <Button className={`topbar-btn ${activeTab === 'library' ? 'active' : ''}`} onClick={() => handleMenu('library')}>📚 书库</Button>
         <Button className={`topbar-btn ${activeTab === 'reader' ? 'active' : ''}`} disabled={!currentBook} onClick={() => handleMenu('reader')}>📖 阅读</Button>
-        <Button className="topbar-btn" onClick={() => handleMenu('settings')}>⚙️ 设置</Button>
+        <Button className="topbar-btn" onClick={() => setSettingsOpen(true)}>⚙️ 设置</Button>
         <Button className="topbar-btn" onClick={() => setAboutOpen(true)}>ℹ️ 关于</Button>
         <div className="topbar-spacer" />
         <div className="topbar-status">
@@ -146,15 +147,10 @@ export default function App() {
             )}
           </div>
         )}
-        {/* Settings */}
-        {activeTab === 'settings' && (
-          <div className="full-view">
-            <Settings />
-          </div>
-        )}
-
         {/* About Modal */}
         <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+        {/* Settings Modal */}
+        <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       </div>
     </div>
   )

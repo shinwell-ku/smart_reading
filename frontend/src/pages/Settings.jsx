@@ -30,7 +30,7 @@ const PROVIDER_OPTIONS = [
 const GROUPED_OPTIONS = PROVIDER_OPTIONS.flatMap(g => g.items)
 const flatOptions = PROVIDER_OPTIONS.flatMap(g => g.items.map(i => ({ ...i, _group: g.group })))
 
-export default function Settings() {
+export default function Settings({ open, onClose }) {
   const [eyeCare, setEyeCare] = useState(localStorage.getItem('sr_eyeCare') === 'true')
 
   const [mode, setMode] = useState('local')
@@ -103,8 +103,8 @@ export default function Settings() {
   }
 
   return (
+    <Modal title="设置" open={open} onCancel={onClose} footer={null} width={640} centered>
     <div className="settings-view">
-      <Card title="阅读设置" size="small" style={{ marginBottom: 16 }}>
         <Form layout="inline" style={{ flexWrap: 'wrap', gap: 8 }}>
           <Form.Item label="护眼模式">
             <Switch checked={eyeCare} onChange={toggleEyeCare} />
@@ -172,5 +172,6 @@ export default function Settings() {
         </Space>
       </Card>
     </div>
+    </Modal>
   )
 }
