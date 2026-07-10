@@ -73,9 +73,11 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     return () => window.removeEventListener('refresh-bookmarks', h)
   }, [book])
 
-  // 切到图谱标签时自动加载（数据可能已在后台生成完毕）
+  // 切到标签时自动加载数据
   useEffect(() => {
-    if (activeTab === 'knowledge' && book) loadGraph(book.id)
+    if (!book) return
+    if (activeTab === 'knowledge') loadGraph(book.id)
+    if (activeTab === 'vocabulary') api.getWords(book.id).then(r => setWords(r.words || [])).catch(() => {})
   }, [activeTab, book])
 
   // 组件卸载时清理后台轮询
@@ -94,7 +96,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       setResultText(r.translated_text || '翻译失败')
       // 自动保存生词
       if (r.translated_text && book) {
-        api.saveWord({ book_id: book.id, word: t.slice(0, 100), translation: r.translated_text.slice(0, 200), page_num: page }).catch(() => {})
+        api.saveWord({ book_id: book.id, word: t.slice(0, 100), translation: r.translated_text.slice(0, 200), page_num: page }).then(() => {
+          api.getWords(book.id).then(r => setWords(r.words || [])).catch(() => {})
+        }).catch(() => {})
       }
     } catch (e) { setResultText('翻译失败: ' + (e.message || '')) }
     setTranslating(false)
