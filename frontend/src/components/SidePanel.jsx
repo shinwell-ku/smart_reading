@@ -206,6 +206,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     { value: 'auto', label: '自动检测' }, { value: 'zh', label: '中文' }, { value: 'en', label: 'English' },
     { value: 'ja', label: '日本語' }, { value: 'ko', label: '한국어' }, { value: 'fr', label: 'Français' },
     { value: 'de', label: 'Deutsch' }, { value: 'es', label: 'Español' }, { value: 'ru', label: 'Русский' },
+    { value: 'pt', label: 'Português' }, { value: 'it', label: 'Italiano' }, { value: 'nl', label: 'Nederlands' },
+    { value: 'pl', label: 'Polski' }, { value: 'tr', label: 'Türkçe' }, { value: 'vi', label: 'Tiếng Việt' },
+    { value: 'th', label: 'ไทย' }, { value: 'ar', label: 'العربية' }, { value: 'hi', label: 'हिन्दी' },
   ]
 
   return (
