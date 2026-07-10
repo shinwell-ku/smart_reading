@@ -216,7 +216,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
           <div className="panel-body" style={{ flex: 1 }}>
             <div className="panel-controls">
               <Select value={sourceLang} onChange={setSourceLang} size="small" style={{ width: 100 }} options={langOpts} />
-              <Button size="small" onClick={() => { const s = sourceLang; setSourceLang(targetLang); setTargetLang(s) }}>⇄</Button>
+              <Button size="small" onClick={() => { const s = sourceLang; const t = targetLang === 'auto' ? 'en' : targetLang; setSourceLang(t); setTargetLang(s === 'auto' ? 'en' : s) }}>⇄</Button>
               <Select value={targetLang} onChange={setTargetLang} size="small" style={{ width: 100 }} options={langOpts.filter(o => o.value !== 'auto')} />
               <Button type="primary" size="small" onClick={translate} loading={translating}>翻译</Button>
               <Button size="small" onClick={fillPageText}>当前页</Button>
