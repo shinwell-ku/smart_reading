@@ -203,12 +203,15 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
 
   // Language options
   const langOpts = [
-    { value: 'auto', label: '自动检测' }, { value: 'zh', label: '中文' }, { value: 'en', label: 'English' },
-    { value: 'ja', label: '日本語' }, { value: 'ko', label: '한국어' }, { value: 'fr', label: 'Français' },
-    { value: 'de', label: 'Deutsch' }, { value: 'es', label: 'Español' }, { value: 'ru', label: 'Русский' },
-    { value: 'pt', label: 'Português' }, { value: 'it', label: 'Italiano' }, { value: 'nl', label: 'Nederlands' },
-    { value: 'pl', label: 'Polski' }, { value: 'tr', label: 'Türkçe' }, { value: 'vi', label: 'Tiếng Việt' },
-    { value: 'th', label: 'ไทย' }, { value: 'ar', label: 'العربية' }, { value: 'hi', label: 'हिन्दी' },
+    { value: 'auto', label: '自动检测' }, { value: 'zh', label: '中文' },
+    { value: 'en', label: 'English (中文)' }, { value: 'ja', label: '日本語 (中文)' },
+    { value: 'ko', label: '한국어 (中文)' }, { value: 'fr', label: 'Français (中文)' },
+    { value: 'de', label: 'Deutsch (中文)' }, { value: 'es', label: 'Español (中文)' },
+    { value: 'ru', label: 'Русский (中文)' }, { value: 'pt', label: 'Português (中文)' },
+    { value: 'it', label: 'Italiano (中文)' }, { value: 'nl', label: 'Nederlands (中文)' },
+    { value: 'pl', label: 'Polski (中文)' }, { value: 'tr', label: 'Türkçe (中文)' },
+    { value: 'vi', label: 'Tiếng Việt (中文)' }, { value: 'th', label: 'ไทย (中文)' },
+    { value: 'ar', label: 'العربية (中文)' }, { value: 'hi', label: 'हिन्दी (中文)' },
   ]
 
   return (
