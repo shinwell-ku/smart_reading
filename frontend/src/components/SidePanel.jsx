@@ -325,6 +325,13 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                     <span style={{ fontSize: 11, color: '#909399' }}>密</span>
                   </div>
                 )}
+                <Button size="small" danger onClick={async () => {
+                  if (!book || !graphExists) return
+                  await api.deleteKnowledgeGraph(book.id)
+                  setGraphExists(false)
+                  setGraphData(null)
+                  if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null }
+                }}>清除</Button>
               </div>
             )}
             <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>

@@ -124,6 +124,20 @@ def update_knowledge_graph(book_id):
     return jsonify(MessageResponse(message="图谱已更新").model_dump())
 
 
+@knowledge_bp.route('/graph/<int:book_id>', methods=['DELETE'])
+def clear_knowledge_graph(book_id):
+    """清除知识图谱数据"""
+    db = get_db()
+    db.query(KnowledgeNode).filter_by(book_id=book_id).delete()
+    db.query(KnowledgeEdge).filter_by(book_id=book_id).delete()
+    db.commit()
+    # 删除缓存文件
+    knowledge_path = os.path.join(CACHE_DIR, f'book_{book_id}_knowledge.json')
+    if os.path.exists(knowledge_path):
+        os.remove(knowledge_path)
+    return jsonify(MessageResponse(message="图谱已清除").model_dump())
+
+
 @knowledge_bp.route('/export/<int:book_id>', methods=['GET'])
 def export_knowledge(book_id):
     fmt = request.args.get('format', 'txt')

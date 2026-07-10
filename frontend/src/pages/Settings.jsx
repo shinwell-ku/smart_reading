@@ -118,15 +118,13 @@ export default function Settings({ open, onClose }) {
           },
           {
             key: 'translate',
-            label: '翻译模型',
+            label: '翻译引擎',
             children: configLoaded ? (
               <Form layout="vertical" size="small">
-                <Form.Item label="翻译引擎">
-                  <Radio.Group value={mode} onChange={e => setMode(e.target.value)}>
-                    <Radio value="local">本地模型</Radio>
-                    <Radio value="remote">远程 LLM</Radio>
-                  </Radio.Group>
-                </Form.Item>
+                <Radio.Group value={mode} onChange={e => setMode(e.target.value)}>
+                  <Radio value="local">本地模型</Radio>
+                  <Radio value="remote">远程 LLM</Radio>
+                </Radio.Group>
 
                 {mode === 'remote' && (
                   <>

@@ -198,11 +198,11 @@ class TranslatorService:
         ja_ratio = ja_chars / total
         ko_ratio = ko_chars / total
 
-        if zh_ratio > 0.3:
+        if zh_ratio > 0.1:
             return 'zh'
-        if ja_ratio > 0.2:
+        if ja_ratio > 0.1:
             return 'ja'
-        if ko_ratio > 0.2:
+        if ko_ratio > 0.1:
             return 'ko'
         return 'en'
 

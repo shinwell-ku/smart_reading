@@ -403,6 +403,7 @@ export default function Reader({ book, onPageChange, onBack }) {
                     <Page
                       pageNumber={p}
                       scale={scale}
+                      loading={<div style={{ padding: 20, color: '#909399', textAlign: 'center', fontSize: 12 }}>加载中...</div>}
                       renderTextLayer={true}
                       renderAnnotationLayer={false}
                     />

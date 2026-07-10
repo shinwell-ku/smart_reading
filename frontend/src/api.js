@@ -36,6 +36,7 @@ export const api = {
   getTranslationStatus: (bid) => req('GET', `/api/translate/status/${bid}`),
   getKnowledgeGraph: (bid) => req('GET', `/api/knowledge/graph/${bid}`),
   extractKnowledge: (bid) => req('POST', `/api/knowledge/extract/${bid}`),
+  deleteKnowledgeGraph: (bid) => req('DELETE', `/api/knowledge/graph/${bid}`),
   search: (bid, kw) => req('GET', `/api/search/${bid}?q=${encodeURIComponent(kw)}`),
   backup: () => req('POST', '/api/backup'),
   clearAllData: () => req('POST', '/api/data/clear'),
