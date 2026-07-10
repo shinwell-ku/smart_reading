@@ -103,6 +103,7 @@ export default function Settings({ open, onClose }) {
 
   return (
     <Modal title="设置" open={open} onCancel={onClose} footer={null} width={640} centered>
+      <div style={{ maxHeight: 380, overflowY: 'auto', margin: '-12px -16px', padding: '12px 16px' }}>
       <Tabs
         items={[
           {
@@ -180,6 +181,7 @@ export default function Settings({ open, onClose }) {
           },
         ]}
       />
+      </div>
     </Modal>
   )
 }
