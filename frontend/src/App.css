@@ -83,3 +83,40 @@ html, body, #root { height: 100%; overflow: hidden; font-family: -apple-system, 
 
 /* PDF selection */
 .pdf-container ::selection { background: rgba(64, 158, 255, 0.35); }
+
+/* ============================================================
+   暗黑模式
+   ============================================================ */
+.dark-mode, .dark-mode #root, .dark-mode .app,
+.dark-mode .split-right, .dark-mode .reader-toolbar,
+.dark-mode .reader-footer { background: #1a1a2e; color: #c0c4cc; }
+.dark-mode .pdf-container { background: #12121f; }
+.dark-mode .docx-page { background: #1e1e3a !important; color: #c8c8d4 !important; }
+.dark-mode .reader-outline { background: #1a1a2e; border-right-color: #2a2a4a; }
+.dark-mode .outline-item { color: #a0a4b0; }
+.dark-mode .outline-item:hover { background: #252545; }
+.dark-mode .outline-item.active { background: #1e2a4a; color: #64b5ff; }
+.dark-mode .panel-body, .dark-mode .panel-graph,
+.dark-mode .settings-view, .dark-mode .full-view { background: #1a1a2e; }
+.dark-mode .lib-header { background: #1a1a2e; border-bottom-color: #2a2a4a; }
+.dark-mode .lib-header h2 { color: #e0e0e0; }
+.dark-mode .book-card { background: #1e1e3a; border-color: #2a2a4a; }
+.dark-mode .book-title { color: #e0e0e0; }
+.dark-mode .book-meta { color: #888; }
+.dark-mode .ant-card { background: #1e1e3a !important; border-color: #2a2a4a !important; }
+.dark-mode .ant-card-head { border-bottom-color: #2a2a4a !important; color: #e0e0e0 !important; }
+.dark-mode .split-right { border-left-color: #2a2a4a; }
+.dark-mode .split-handle:hover { background: #64b5ff; }
+.dark-mode .reader-title { color: #e0e0e0; }
+.dark-mode .reader-outline .reader-title { color: #e0e0e0; }
+
+/* 跟随系统 */
+@media (prefers-color-scheme: dark) {
+  .theme-system {
+    --bg: #1a1a2e;
+    --bg-card: #1e1e3a;
+    --text: #c0c4cc;
+    --text-primary: #e0e0e0;
+    --border: #2a2a4a;
+  }
+}
