@@ -40,7 +40,6 @@ export const api = {
   extractKnowledge: (bid) => req('POST', `/api/knowledge/extract/${bid}`),
   deleteKnowledgeGraph: (bid) => req('DELETE', `/api/knowledge/graph/${bid}`),
   search: (bid, kw) => req('GET', `/api/search/${bid}?q=${encodeURIComponent(kw)}`),
-  tts: (text, voice) => req('POST', '/api/tts', { text, voice }),
   backup: () => req('POST', '/api/backup'),
   clearAllData: () => req('POST', '/api/data/clear'),
   getTranslatorConfig: () => req('GET', '/api/settings/translator'),

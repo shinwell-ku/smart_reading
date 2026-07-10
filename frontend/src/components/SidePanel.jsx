@@ -30,7 +30,6 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [sourceText, setSourceText] = useState('')
   const [resultText, setResultText] = useState('')
   const [translating, setTranslating] = useState(false)
-  const [ttsPlaying, setTtsPlaying] = useState(false)
   const [sourceLang, setSourceLang] = useState('auto')
   const [targetLang, setTargetLang] = useState('zh')
   const [notes, setNotes] = useState([])
@@ -250,24 +249,6 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               <Button type="primary" size="small" onClick={translate} loading={translating}>翻译</Button>
               <Button size="small" onClick={fillPageText}>当前页</Button>
               <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>清除</Button>
-              <Button size="small" loading={ttsPlaying} onClick={async () => {
-                const t = sourceText.trim()
-                if (!t) { message.info('请先输入文本'); return }
-                setTtsPlaying(true)
-                try {
-                  const resp = await fetch('http://127.0.0.1:5001/api/tts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: t, voice: 'Tingting' }),
-                  })
-                  if (!resp.ok) { message.error('语音合成失败'); setTtsPlaying(false); return }
-                  const blob = await resp.blob()
-                  const url = URL.createObjectURL(blob)
-                  const audio = new Audio(url)
-                  audio.onended = () => { URL.revokeObjectURL(url); setTtsPlaying(false) }
-                  audio.play()
-                } catch { message.error('语音合成失败'); setTtsPlaying(false) }
-              }}>🔊</Button>
             </div>
             <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="选中文本后自动填充或点当前页" />
             <Input.TextArea className="panel-textarea" value={resultText} readOnly placeholder="翻译结果" />
