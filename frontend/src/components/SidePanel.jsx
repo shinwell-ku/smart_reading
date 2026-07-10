@@ -298,8 +298,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         {activeTab === 'search' && (
           <div className="panel-body" style={{ flex: 1 }}>
             <Input.Search
-              placeholder="搜索当前文档..." value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="搜索当前文档..." value={searchQuery} allowClear
+              onChange={e => { setSearchQuery(e.target.value); if (!e.target.value) setSearchResults([]) }}
               loading={searching}
               onSearch={async (val) => {
                 if (!book || !val.trim()) return
