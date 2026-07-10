@@ -2,13 +2,17 @@
 html, body, #root { height: 100%; overflow: hidden; font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
 
 .app { display: flex; flex-direction: column; height: 100vh; }
-.eye-care { background: #fdf6e3; }
-.eye-care .pdf-container { background: #fdf6e3; }
+.eye-care, .eye-care #root, .eye-care .app,
+.eye-care .split-right, .eye-care .reader-toolbar,
+.eye-care .reader-footer { background: #fdf6e3; }
+.eye-care .pdf-container { background: #f5edd6; }
 .eye-care .docx-page { background: #fefaf0 !important; }
 .eye-care .reader-outline { background: #fefaf0; }
-.eye-care .panel-body { background: #fefaf0; }
-.eye-care .panel-graph { background: #fefaf0; }
-.eye-care .settings-view { background: #fdf6e3; min-height: 100%; }
+.eye-care .panel-body, .eye-care .panel-graph,
+.eye-care .settings-view, .eye-care .full-view { background: #fdf6e3; }
+.eye-care .lib-header { background: #fdf6e3; }
+.eye-care .book-card { background: #fefaf0; }
+.eye-care .ant-card { background: #fefaf0; }
 
 /* TopBar */
 .topbar { display: flex; align-items: center; height: 44px; background: linear-gradient(135deg, #1a1a40, #4a3f7a); padding: 0 12px; gap: 2px; flex-shrink: 0; }
