@@ -31,8 +31,6 @@ const GROUPED_OPTIONS = PROVIDER_OPTIONS.flatMap(g => g.items)
 const flatOptions = PROVIDER_OPTIONS.flatMap(g => g.items.map(i => ({ ...i, _group: g.group })))
 
 export default function Settings() {
-  const [fontSize, setFontSize] = useState(parseInt(localStorage.getItem('sr_fontSize') || '16'))
-  const [lineHeight, setLineHeight] = useState(localStorage.getItem('sr_lineHeight') || '1.8')
   const [eyeCare, setEyeCare] = useState(localStorage.getItem('sr_eyeCare') === 'true')
 
   const [mode, setMode] = useState('local')
@@ -78,18 +76,6 @@ export default function Settings() {
     } catch { message.error('保存失败') }
   }
 
-  const updateFontSize = (v) => {
-    setFontSize(v)
-    localStorage.setItem('sr_fontSize', String(v))
-    document.querySelectorAll('.pdf-page, .reader-content').forEach(el => el.style.fontSize = v + 'px')
-  }
-
-  const updateLineHeight = (v) => {
-    setLineHeight(v)
-    localStorage.setItem('sr_lineHeight', v)
-    document.querySelectorAll('.pdf-page, .reader-content').forEach(el => el.style.lineHeight = v)
-  }
-
   const toggleEyeCare = (v) => {
     setEyeCare(v)
     localStorage.setItem('sr_eyeCare', v)
@@ -120,13 +106,6 @@ export default function Settings() {
     <div className="settings-view">
       <Card title="阅读设置" size="small" style={{ marginBottom: 16 }}>
         <Form layout="inline" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <Form.Item label="字体大小">
-            <Slider min={12} max={32} value={fontSize} onChange={updateFontSize} style={{ width: 180 }} />
-          </Form.Item>
-          <Form.Item label="行间距">
-            <Select value={lineHeight} onChange={updateLineHeight} size="small" style={{ width: 100 }}
-              options={[{ value: '1.5', label: '紧凑' }, { value: '1.8', label: '正常' }, { value: '2.2', label: '宽松' }]} />
-          </Form.Item>
           <Form.Item label="护眼模式">
             <Switch checked={eyeCare} onChange={toggleEyeCare} />
           </Form.Item>
