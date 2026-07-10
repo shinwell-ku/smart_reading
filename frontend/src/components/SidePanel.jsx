@@ -97,12 +97,6 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     } catch {}
   }
 
-  const fullTranslate = async () => {
-    if (!book) return
-    await api.translateFull({ book_id: book.id, target_lang: targetLang })
-    message.success('全文翻译已启动')
-  }
-
   const addNote = async () => {
     if (!book || !noteText.trim()) return
     await api.addNote(book.id, { page_num: page, content: noteText, color: noteColor })
@@ -230,7 +224,6 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             </div>
             <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="选中文本后自动填充或点当前页" />
             <Input.TextArea className="panel-textarea" value={resultText} readOnly placeholder="翻译结果" />
-            <Button size="small" block onClick={fullTranslate}>全文翻译</Button>
           </div>
         )}
         {activeTab === 'notes' && (
