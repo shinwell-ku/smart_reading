@@ -49,13 +49,13 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [graphLabels, setGraphLabels] = useState('auto')
   const [graphEdges, setGraphEdges] = useState('all')
   const [graphRepulsion, setGraphRepulsion] = useState(400)
+  const [generating, setGenerating] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState(null)
   const [showEntityList, setShowEntityList] = useState(true)
   const [graphSearch, setGraphSearch] = useState('')
   const graphRef = useRef(null)
   const chartRef = useRef(null)
   const resizeObserverRef = useRef(null)
-  const pollRef = useRef(null)
 
   useEffect(() => {
     const h = (e) => { if (e.detail && activeTab === 'translate') setSourceText(cleanText(e.detail.slice(0, 5000))) }
@@ -89,10 +89,6 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     }
   }, [activeTab, book, wordRefresh])
 
-  // 组件卸载时清理后台轮询
-  useEffect(() => {
-    return () => { if (pollRef.current && typeof pollRef.current === 'number') clearInterval(pollRef.current); pollRef.current = null }
-  }, [])
 
   const translate = async () => {
     const t = sourceText.trim()
@@ -485,13 +481,13 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   </div>
                 )}
                 <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
-                  {!graphExists && !pollRef.current && (
+                  {!graphExists && !generating && (
                     <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 30, fontSize: 12 }}>
                       <div style={{ fontSize: 32, marginBottom: 6 }}>🔗</div>
                       点击下方按钮生成知识图谱
                     </div>
                   )}
-                  {pollRef.current && (
+                  {generating && (
                     <div style={{ textAlign: 'center', color: '#909399', padding: 30, fontSize: 12 }}>
                       <div style={{ fontSize: 32, marginBottom: 6 }}>⏳</div>
                       知识抽取中，完成后右下角会通知您
@@ -503,63 +499,59 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             )}
             <div style={{ marginTop: 'auto' }}>
             {!graphExists && (
-              <Button size="small" type="primary" block loading={pollRef.current !== null}
-                disabled={pollRef.current !== null}
+              <Button size="small" type="primary" block loading={generating}
+                disabled={generating}
                 onClick={() => {
-                  if (!book || pollRef.current) return
-                  pollRef.current = 'lock'
+                  if (!book || generating) return
+                  setGenerating(true)
                   const bid = book.id
                   api.extractKnowledge(bid).then(r => {
                     message.success(r.message || '知识抽取已启动')
-                    if (!pollRef.current) return
-                    let attempts = 0
-                    pollRef.current = setInterval(async () => {
-                      attempts++
+                    if (!generating) return
+                    const poll = setInterval(async () => {
                       try {
                         const data = await api.getKnowledgeGraph(bid)
                         if (data.nodes && data.nodes.length) {
-                          clearInterval(pollRef.current); pollRef.current = null
+                          clearInterval(poll)
+                          setGenerating(false)
                           setGraphExists(true)
                           notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
                           if (activeTab === 'knowledge') loadGraph(bid)
                         }
                       } catch {}
-                      if (attempts > 180) { clearInterval(pollRef.current); pollRef.current = null }
                     }, 10000)
                   })
                 }}>
-                {pollRef.current ? '生成中...' : '生成图谱'}
+                {generating ? '生成中...' : '生成图谱'}
               </Button>
             )}
             </div>
             {graphExists && (
-              <Button size="small" type={pollRef.current ? 'default' : 'primary'}
-                disabled={pollRef.current !== null}
-                style={pollRef.current ? { color: '#c0c4cc', borderColor: '#e4e7ed' } : {}}
+              <Button size="small" type={generating ? 'default' : 'primary'}
+                disabled={generating}
+                loading={generating}
+                style={generating ? { color: '#c0c4cc', borderColor: '#e4e7ed' } : {}}
                 onClick={() => {
-                  if (!book || pollRef.current) return
-                  pollRef.current = 'lock'
+                  if (!book || generating) return
+                  setGenerating(true)
                   const bid = book.id
                   api.extractKnowledge(bid).then(r => {
                     message.success(r.message || '知识抽取已启动')
-                    if (!pollRef.current) return
-                    let attempts = 0
-                    pollRef.current = setInterval(async () => {
-                      attempts++
+                    if (!generating) return
+                    const poll = setInterval(async () => {
                       try {
                         const data = await api.getKnowledgeGraph(bid)
                         if (data.nodes && data.nodes.length) {
-                          clearInterval(pollRef.current); pollRef.current = null
+                          clearInterval(poll); setGenerating(false)
                           setGraphExists(true)
                           notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
                           if (activeTab === 'knowledge') loadGraph(bid)
                         }
                       } catch {}
-                      if (attempts > 180) { clearInterval(pollRef.current); pollRef.current = null }
                     }, 10000)
                   })
                 }}>
-                {pollRef.current ? '生成中...' : '重新生成'}
+                {generating ? '生成中...' : '重新生成'}
               </Button>
             )}
           </div>
