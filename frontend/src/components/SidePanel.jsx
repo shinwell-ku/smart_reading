@@ -438,14 +438,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>
                   {showEntityList ? '隐藏列表' : '列表'}
                 </Button>
-                <Button size="small" onClick={() => {
-                  try {
-                    const url = chartRef.current?.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' })
-                    if (url) {
-                      const a = document.createElement('a'); a.href = url; a.download = '知识图谱.png'; a.click()
-                    }
-                  } catch {}
-                }} style={{ fontSize: 11 }}>📷</Button>
+                <Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} style={{ fontSize: 13, lineHeight: 1, padding: '0 6px' }}>＋</Button>
+                <Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} style={{ fontSize: 13, lineHeight: 1, padding: '0 6px' }}>−</Button>
+                <Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button>
                 <Button size="small" danger onClick={async () => {
                   if (!book || !graphExists) return
                   await api.deleteKnowledgeGraph(book.id)
