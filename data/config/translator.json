@@ -1,5 +1,5 @@
 {
-  "mode": "local",
+  "mode": "remote",
   "remote": {
     "provider": "deepseek",
     "api_base": "https://api.deepseek.com",
