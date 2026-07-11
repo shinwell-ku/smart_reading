@@ -12,7 +12,7 @@ export default function AboutModal({ open, onClose }) {
       centered
     >
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📚</div>
+        <img src="./logo.png" alt="AI智慧阅读" style={{ width: 64, height: 64, borderRadius: 12, marginBottom: 12 }} />
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>AI智慧阅读</h2>
         <p style={{ color: '#909399', marginBottom: 12 }}>v1.0.0</p>
         <p style={{ color: '#606266', marginBottom: 4 }}>纯本地离线 AI 阅读软件</p>
