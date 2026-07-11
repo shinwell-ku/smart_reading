@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
-import { Select, Button, Input, message, notification, Modal } from 'antd'
+import { Select, Button, Input, message, notification, Modal, Tooltip } from 'antd'
 import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
@@ -422,7 +422,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
           <div className="panel-body" style={{ flex: 1 }}>
             {graphExists && (
               <>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, paddingBottom: 6, flexShrink: 0, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 4, paddingBottom: 6, flexShrink: 0, alignItems: 'center', flexWrap: 'nowrap' }}>
                 <Select size="small" value={graphLayout} onChange={setGraphLayout}
                   style={{ width: 82 }}
                   options={[
@@ -450,9 +450,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>
                   {showEntityList ? '隐藏列表' : '列表'}
                 </Button>
-                <Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} />
-                <Button size="small" icon={<ZoomOutOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} />
-                <Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button>
+                <Tooltip title="放大"><Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} /></Tooltip>
+                <Tooltip title="缩小"><Button size="small" icon={<ZoomOutOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} /></Tooltip>
+                <Tooltip title="重置视图"><Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button></Tooltip>
                 <Button size="small" danger onClick={async () => {
                   if (!book || !graphExists) return
                   await api.deleteKnowledgeGraph(book.id)
