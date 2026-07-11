@@ -445,18 +445,18 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#eb2f96', marginRight:2 }}></span>术语</span>
               </div>
             )}
-            {graphExists && showEntityList && graphData && (
-              <div style={{ width: 150, flexShrink: 0, fontSize: 11, borderRight: '1px solid #f0f0f0', paddingRight: 4, display: 'flex', flexDirection: 'column', marginBottom: 4 }}>
-                <Input size="small" placeholder="搜索实体..." value={graphSearch} onChange={e => setGraphSearch(e.target.value)} style={{ marginBottom: 4, fontSize: 11 }} />
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {graphData.nodes.filter(n => n.level >= 2 && (!graphSearch || n.label.includes(graphSearch))).map((n, i) => (
-                    <div key={n.id} style={{ padding: '3px 6px', cursor: 'pointer', borderRadius: 3, color: '#303133', marginBottom: 2, background: selectedEntity?.id === n.id ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${{root:'#636e72',chapter:'#13c2c2',concept:'#1677ff',technology:'#52c41a',method:'#faad14',person:'#722ed1',term:'#eb2f96'}[n.type] || '#bfbfbf'}` }} onClick={() => setSelectedEntity(n)}>{n.label}</div>
-                  ))}
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 6 }}>
+              {graphExists && showEntityList && graphData && (
+                <div style={{ width: 150, flexShrink: 0, fontSize: 11, borderRight: '1px solid #f0f0f0', paddingRight: 4, display: 'flex', flexDirection: 'column' }}>
+                  <Input size="small" placeholder="搜索实体..." value={graphSearch} onChange={e => setGraphSearch(e.target.value)} style={{ marginBottom: 4, fontSize: 11 }} />
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {graphData.nodes.filter(n => n.level >= 2 && (!graphSearch || n.label.includes(graphSearch))).map((n, i) => (
+                      <div key={n.id} style={{ padding: '3px 6px', cursor: 'pointer', borderRadius: 3, color: '#303133', marginBottom: 2, background: selectedEntity?.id === n.id ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${{root:'#636e72',chapter:'#13c2c2',concept:'#1677ff',technology:'#52c41a',method:'#faad14',person:'#722ed1',term:'#eb2f96'}[n.type] || '#bfbfbf'}` }} onClick={() => setSelectedEntity(n)}>{n.label}</div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {/* graphRef 在条件外，始终存在 */}
-            <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
+              )}
+              <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
               {!graphExists && !extracting && (
                 <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 30, fontSize: 12 }}>
                   <div style={{ fontSize: 32, marginBottom: 6 }}>🔗</div>
@@ -469,6 +469,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   知识抽取中
                 </div>
               )}
+            </div>
             </div>
             <div style={{ marginTop: 'auto' }}>
               <Button size="small" type="primary" block disabled={extracting} loading={extracting}
