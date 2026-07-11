@@ -18,6 +18,7 @@
 
   <rect width="512" height="512" rx="100" fill="url(#bg)"/>
 
+  <g transform="translate(0, 15)">
   <!-- 书堆 -->
   <g opacity="0.95">
     <rect x="60" y="380" width="392" height="40" rx="4" fill="url(#b3)"/>
@@ -57,4 +58,5 @@
   <circle cx="256" cy="65" r="12" fill="#22d3ee"/>
   <circle cx="210" cy="35" r="9" fill="#38bdf8" opacity="0.6"/>
   <circle cx="302" cy="35" r="9" fill="#38bdf8" opacity="0.6"/>
+  </g>
 </svg>
