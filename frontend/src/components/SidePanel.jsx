@@ -178,9 +178,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               symbolSize: [28, 22, 16, 12][n.level] || 12,
               itemStyle: {
                 color: {
-                  'root': '#722ed1', 'chapter': '#13c2c2',
+                  'root': '#636e72', 'chapter': '#13c2c2',
                   'concept': '#1677ff', 'technology': '#52c41a',
-                  'method': '#faad14', 'person': '#ff4d4f', 'term': '#eb2f96',
+                  'method': '#faad14', 'person': '#722ed1', 'term': '#eb2f96',
                 }[n.type] || '#bfbfbf',
                 borderColor: '#fff', borderWidth: 2,
               },
@@ -198,17 +198,29 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               },
             })),
             layoutAnimation: false,
+            selectedMode: 'multiple',
+            select: {
+              itemStyle: { borderColor: '#303133', borderWidth: 3 },
+              label: { fontWeight: 'bold', fontSize: 12 },
+              lineStyle: { width: 2 },
+            },
+            emphasis: { focus: 'adjacency', lineStyle: { width: 2.5 } },
             force: { repulsion: r, edgeLength: [80, 200], gravity: layout === 'radial' ? 0.15 : 0.05, friction: 0.2 },
             label: { show: showLabel !== undefined ? showLabel : true, position: 'right', fontSize: 10, color: '#303133' },
             lineStyle: { color: '#e0e0e0' },
-            emphasis: { focus: 'adjacency', lineStyle: { width: 2 } },
           }]
         })
-        // 节点点击 → 查看详情
+        // 节点点击 → 查看详情 + 选中高亮
         chart.on('click', (params) => {
           if (params.dataType === 'node') {
             const node = data.nodes.find(n => n.id === params.data.id)
             if (node) setSelectedEntity(node)
+          }
+        })
+        // 双击 → 清除选中
+        chart.on('dblclick', (params) => {
+          if (params.dataType === 'node') {
+            chart.dispatchAction({ type: 'unselectAll' })
           }
         })
         // 节点双击 → 跳转到原文
@@ -424,8 +436,16 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 )}
                 <Button size="small" type={showEntityList ? 'primary' : 'default'}
                   onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>
-                  {showEntityList ? '隐藏列表' : '实体列表'}
+                  {showEntityList ? '隐藏列表' : '列表'}
                 </Button>
+                <Button size="small" onClick={() => {
+                  try {
+                    const url = chartRef.current?.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' })
+                    if (url) {
+                      const a = document.createElement('a'); a.href = url; a.download = '知识图谱.png'; a.click()
+                    }
+                  } catch {}
+                }} style={{ fontSize: 11 }}>📷</Button>
                 <Button size="small" danger onClick={async () => {
                   if (!book || !graphExists) return
                   await api.deleteKnowledgeGraph(book.id)
@@ -437,7 +457,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#1677ff', marginRight:2 }}></span>概念</span>
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#52c41a', marginRight:2 }}></span>技术</span>
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#faad14', marginRight:2 }}></span>方法</span>
-                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#ff4d4f', marginRight:2 }}></span>人物</span>
+                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#722ed1', marginRight:2 }}></span>人物</span>
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#eb2f96', marginRight:2 }}></span>术语</span>
               </div>
               <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 6 }}>
@@ -449,7 +469,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                       {graphData.nodes.filter(n => n.level >= 2 && (!graphSearch || n.label.includes(graphSearch))).map((n, i) => (
                         <div key={n.id} style={{ padding: '3px 6px', cursor: 'pointer', borderRadius: 3, color: '#303133', marginBottom: 2,
                           background: selectedEntity?.id === n.id ? '#e6f4ff' : 'transparent',
-                          borderLeft: `3px solid ${{root:'#722ed1',chapter:'#13c2c2',concept:'#1677ff',technology:'#52c41a',method:'#faad14',person:'#ff4d4f',term:'#eb2f96'}[n.type] || '#bfbfbf'}` }}
+                          borderLeft: `3px solid ${{root:'#636e72',chapter:'#13c2c2',concept:'#1677ff',technology:'#52c41a',method:'#faad14',person:'#722ed1',term:'#eb2f96'}[n.type] || '#bfbfbf'}` }}
                           onClick={() => setSelectedEntity(n)}>
                           {n.label}
                         </div>
