@@ -12,7 +12,7 @@ notes_bp = Blueprint('notes', __name__, url_prefix='/api')
 @notes_bp.route('/books/<int:book_id>/notes', methods=['GET'])
 def get_notes(book_id):
     db = get_db()
-    notes = db.query(Note).filter_by(book_id=book_id).order_by(Note.page_num.asc(), Note.created_at.desc()).all()
+    notes = db.query(Note).filter_by(book_id=book_id).order_by(Note.created_at.desc()).all()
     items = [NoteResponse.model_validate(n) for n in notes]
     return jsonify(NoteListResponse(notes=items).model_dump())
 
