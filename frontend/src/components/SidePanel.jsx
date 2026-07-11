@@ -238,13 +238,14 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       if (!data.nodes || !data.nodes.length) {
         setGraphExists(false)
         setGraphData(null)
+        setGenerating(false)
         return
       }
       setGraphExists(true)
       setGraphData(data)
       setGenerating(false)
       renderGraph(data, graphLayout, graphLabels, graphEdges, graphRepulsion)
-    } catch (e) { console.error('[图谱] 加载失败:', e) }
+    } catch (e) { console.error('[图谱] 加载失败:', e); setGenerating(false) }
   }
 
   // 布局/标签/边/斥力切换时重新渲染
