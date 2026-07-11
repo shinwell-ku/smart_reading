@@ -56,6 +56,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const graphRef = useRef(null)
   const chartRef = useRef(null)
   const resizeObserverRef = useRef(null)
+  const pollRef = useRef(null)
 
   useEffect(() => {
     const h = (e) => { if (e.detail && activeTab === 'translate') setSourceText(cleanText(e.detail.slice(0, 5000))) }
