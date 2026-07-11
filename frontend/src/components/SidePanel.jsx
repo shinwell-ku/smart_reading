@@ -297,15 +297,15 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   <div key={w.id || i} style={{ padding: '8px 8px 4px', marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12, position: 'relative' }}>
                     <div style={{ fontWeight: 600, color: '#303133', marginBottom: 2, paddingRight: 20 }}>{w.word}</div>
                     <div style={{ color: '#1677ff', marginBottom: 2 }}>{w.translation}</div>
-                    <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399' }}>
-                      {w.page_num > 0 && (
-                        <span style={{ cursor: 'pointer' }} onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: w.page_num }))}>
-                          第{w.page_num}页
-                        </span>
-                      )}
-                      <span>{w.created_at || ''}</span>
-                    </div>
-                    <div style={{ textAlign: 'right', marginTop: 2 }}>
+                    <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {w.page_num > 0 && (
+                          <span style={{ cursor: 'pointer' }} onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: w.page_num }))}>
+                            第{w.page_num}页
+                          </span>
+                        )}
+                        <span>{w.created_at || ''}</span>
+                      </div>
                       <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }}
                         onClick={async () => { await api.deleteWord(w.id); setWords(words.filter(x => x.id !== w.id)) }} />
                     </div>
@@ -328,8 +328,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               {notes.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无笔记</div> : notes.map(n => (
                 <div key={n.id} style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), background: '#f5f7fa', fontSize: 12 }}>
                   <div>{n.content}</div>
-                  <div style={{ fontSize: 11, color: '#909399', marginTop: 2 }}>第{n.page_num}页 · {n.created_at || ''}</div>
-                  <div style={{ textAlign: 'right', marginTop: 2 }}>
+                  <div style={{ display: 'flex', fontSize: 11, color: '#909399', marginTop: 2, justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>第{n.page_num}页 · {n.created_at || ''}</span>
                     <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={() => deleteNote(n.id)} />
                   </div>
                 </div>
@@ -369,10 +369,10 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                         <span onClick={() => { setEditingBmId(b.id); setEditingBmTitle(b.title || `第${b.page_num}页`) }} style={{ color: '#303133' }}>{b.title || `第${b.page_num}页`}</span>
                       )}
                     </div>
-                    <span style={{ color: '#909399', flexShrink: 0, fontSize: 11 }}>第{b.page_num}页 {b.created_at || ''}</span>
-                  </div>
-                  <div style={{ textAlign: 'right', marginTop: 2 }}>
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ color: '#909399', flexShrink: 0, fontSize: 11 }}>第{b.page_num}页 {b.created_at || ''}</span>
+                      <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={function(e) { e.stopPropagation(); api.deleteBookmark(b.id).then(function() { api.getBookmarks(book.id).then(function(r) { setBookmarks(r.bookmarks || []) }) }) }} />
+                    </div>
                   </div>
                 </div>
               ))}
