@@ -43,6 +43,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [graphExists, setGraphExists] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
+  const [extracting, setExtracting] = useState(false)
   const [searching, setSearching] = useState(false)
   const [graphData, setGraphData] = useState(null)
   const [graphLayout, setGraphLayout] = useState('force')
@@ -55,7 +56,6 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const graphRef = useRef(null)
   const chartRef = useRef(null)
   const resizeObserverRef = useRef(null)
-  const pollRef = useRef(null)
 
   useEffect(() => {
     const h = (e) => { if (e.detail && activeTab === 'translate') setSourceText(cleanText(e.detail.slice(0, 5000))) }
@@ -238,14 +238,12 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       if (!data.nodes || !data.nodes.length) {
         setGraphExists(false)
         setGraphData(null)
-        setGenerating(false)
         return
       }
       setGraphExists(true)
       setGraphData(data)
-      setGenerating(false)
       renderGraph(data, graphLayout, graphLabels, graphEdges, graphRepulsion)
-    } catch (e) { console.error('[图谱] 加载失败:', e); setGenerating(false) }
+    } catch (e) { console.error('[图谱] 加载失败:', e) }
   }
 
   // 布局/标签/边/斥力切换时重新渲染
@@ -419,45 +417,26 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         {activeTab === 'knowledge' && (
           <div className="panel-body" style={{ flex: 1 }}>
             {graphExists && (
-              <>
               <div style={{ display: 'flex', gap: 4, paddingBottom: 6, flexShrink: 0, alignItems: 'center', flexWrap: 'nowrap' }}>
-                <Select size="small" value={graphLayout} onChange={setGraphLayout}
-                  style={{ width: 82 }}
-                  options={[
-                    { value: 'force', label: '力导向' },
-                    { value: 'circular', label: '环形' },
-                    { value: 'radial', label: '辐射' },
-                  ]} />
-                <Select size="small" value={graphLabels} onChange={setGraphLabels}
-                  style={{ width: 82 }}
-                  options={[
-                    { value: 'auto', label: '标签少' },
-                    { value: 'all', label: '标签全' },
-                    { value: 'none', label: '标签隐' },
-                  ]} />
+                <Select size="small" value={graphLayout} onChange={setGraphLayout} style={{ width: 82 }}
+                  options={[{ value: 'force', label: '力导向' }, { value: 'circular', label: '环形' }, { value: 'radial', label: '辐射' }]} />
+                <Select size="small" value={graphLabels} onChange={setGraphLabels} style={{ width: 82 }}
+                  options={[{ value: 'auto', label: '标签少' }, { value: 'all', label: '标签全' }, { value: 'none', label: '标签隐' }]} />
                 {graphLayout !== 'circular' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <span style={{ fontSize: 10, color: '#909399' }}>疏</span>
-                    <input type="range" min={100} max={800} step={50} value={graphRepulsion}
-                      onChange={e => setGraphRepulsion(Number(e.target.value))}
-                      style={{ width: 50, margin: 0 }} />
+                    <input type="range" min={100} max={800} step={50} value={graphRepulsion} onChange={e => setGraphRepulsion(Number(e.target.value))} style={{ width: 50, margin: 0 }} />
                     <span style={{ fontSize: 10, color: '#909399' }}>密</span>
                   </div>
                 )}
-                <Button size="small" type={showEntityList ? 'primary' : 'default'}
-                  onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>
-                  {showEntityList ? '隐藏列表' : '列表'}
-                </Button>
+                <Button size="small" type={showEntityList ? 'primary' : 'default'} onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>{showEntityList ? '隐藏列表' : '列表'}</Button>
                 <Tooltip title="放大"><Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} /></Tooltip>
                 <Tooltip title="缩小"><Button size="small" icon={<ZoomOutOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} /></Tooltip>
                 <Tooltip title="重置视图"><Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button></Tooltip>
-                <Button size="small" danger onClick={async () => {
-                  if (!book || !graphExists) return
-                  await api.deleteKnowledgeGraph(book.id)
-                  setGraphExists(false); setGraphData(null); setSelectedEntity(null)
-                  if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null }
-                }}>清除</Button>
+                <Button size="small" danger onClick={async () => { if (!book || !graphExists) return; await api.deleteKnowledgeGraph(book.id); setGraphExists(false); setGraphData(null); setSelectedEntity(null); if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null } }}>清除</Button>
               </div>
+            )}
+            {graphExists && (
               <div style={{ fontSize: 10, color: '#909399', paddingBottom: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#1677ff', marginRight:2 }}></span>概念</span>
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#52c41a', marginRight:2 }}></span>技术</span>
@@ -465,98 +444,55 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#722ed1', marginRight:2 }}></span>人物</span>
                 <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#eb2f96', marginRight:2 }}></span>术语</span>
               </div>
-              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 6 }}>
-                {showEntityList && graphData && (
-                  <div style={{ width: 150, flexShrink: 0, overflow: 'hidden', fontSize: 11, borderRight: '1px solid #f0f0f0', paddingRight: 4, display: 'flex', flexDirection: 'column' }}>
-                    <Input size="small" placeholder="搜索实体..." value={graphSearch}
-                      onChange={e => setGraphSearch(e.target.value)} style={{ marginBottom: 4, fontSize: 11 }} />
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                      {graphData.nodes.filter(n => n.level >= 2 && (!graphSearch || n.label.includes(graphSearch))).map((n, i) => (
-                        <div key={n.id} style={{ padding: '3px 6px', cursor: 'pointer', borderRadius: 3, color: '#303133', marginBottom: 2,
-                          background: selectedEntity?.id === n.id ? '#e6f4ff' : 'transparent',
-                          borderLeft: `3px solid ${{root:'#636e72',chapter:'#13c2c2',concept:'#1677ff',technology:'#52c41a',method:'#faad14',person:'#722ed1',term:'#eb2f96'}[n.type] || '#bfbfbf'}` }}
-                          onClick={() => setSelectedEntity(n)}>
-                          {n.label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
-                  {pollRef.current && (
-                    <div style={{ textAlign: 'center', color: '#909399', padding: 30, fontSize: 12 }}>
-                      <div style={{ fontSize: 32, marginBottom: 6 }}>⏳</div>
-                      知识抽取中，完成后右下角会通知您
-                    </div>
-                  )}
+            )}
+            {graphExists && showEntityList && graphData && (
+              <div style={{ width: 150, flexShrink: 0, fontSize: 11, borderRight: '1px solid #f0f0f0', paddingRight: 4, display: 'flex', flexDirection: 'column', marginBottom: 4 }}>
+                <Input size="small" placeholder="搜索实体..." value={graphSearch} onChange={e => setGraphSearch(e.target.value)} style={{ marginBottom: 4, fontSize: 11 }} />
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {graphData.nodes.filter(n => n.level >= 2 && (!graphSearch || n.label.includes(graphSearch))).map((n, i) => (
+                    <div key={n.id} style={{ padding: '3px 6px', cursor: 'pointer', borderRadius: 3, color: '#303133', marginBottom: 2, background: selectedEntity?.id === n.id ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${{root:'#636e72',chapter:'#13c2c2',concept:'#1677ff',technology:'#52c41a',method:'#faad14',person:'#722ed1',term:'#eb2f96'}[n.type] || '#bfbfbf'}` }} onClick={() => setSelectedEntity(n)}>{n.label}</div>
+                  ))}
                 </div>
               </div>
-              <div style={{ marginTop: 4 }}>
-                <Button size="small" type="primary" block disabled={pollRef.current !== null}
-                  onClick={() => {
-                    if (!book || pollRef.current) return
-                    pollRef.current = 'lock'
-                    const bid = book.id
-                    api.extractKnowledge(bid).then(() => {
-                      const poll = setInterval(async () => {
-                        try {
-                          const data = await api.getKnowledgeGraph(bid)
-                          if (data.nodes && data.nodes.length) {
-                            clearInterval(poll); pollRef.current = null
-                            setGraphExists(true); setGraphData(data)
-                            notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
-                            loadGraph(bid)
-                          }
-                        } catch {}
-                      }, 10000)
-                    })
-                  }}>
-                  重新生成
-                </Button>
-              </div>
-              </>
             )}
-            {!graphExists && (
-              <>
-                <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
-                  {!pollRef.current && (
-                    <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 30, fontSize: 12 }}>
-                      <div style={{ fontSize: 32, marginBottom: 6 }}>🔗</div>
-                      点击下方按钮生成知识图谱
-                    </div>
-                  )}
-                  {pollRef.current && (
-                    <div style={{ textAlign: 'center', color: '#909399', padding: 30, fontSize: 12 }}>
-                      <div style={{ fontSize: 32, marginBottom: 6 }}>⏳</div>
-                      知识抽取中，完成后右下角会通知您
-                    </div>
-                  )}
+            {/* graphRef 在条件外，始终存在 */}
+            <div ref={graphRef} className="panel-graph" style={{ flex: 1, minHeight: 150 }}>
+              {!graphExists && !extracting && (
+                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 30, fontSize: 12 }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>🔗</div>
+                  点击下方按钮生成知识图谱
                 </div>
-                <div style={{ marginTop: 'auto' }}>
-                  <Button size="small" type="primary" block disabled={pollRef.current !== null}
-                    onClick={() => {
-                      if (!book || pollRef.current) return
-                      pollRef.current = 'lock'
-                      const bid = book.id
-                      api.extractKnowledge(bid).then(() => {
-                        const poll = setInterval(async () => {
-                          try {
-                            const data = await api.getKnowledgeGraph(bid)
-                            if (data.nodes && data.nodes.length) {
-                              clearInterval(poll); pollRef.current = null
-                              setGraphExists(true); setGraphData(data)
-                              notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
-                              loadGraph(bid)
-                            }
-                          } catch {}
-                        }, 10000)
-                      })
-                    }}>
-                    生成图谱
-                  </Button>
+              )}
+              {extracting && (
+                <div style={{ textAlign: 'center', color: '#909399', padding: 30, fontSize: 12 }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>⏳</div>
+                  知识抽取中
                 </div>
-              </>
-            )}
+              )}
+            </div>
+            <div style={{ marginTop: 'auto' }}>
+              <Button size="small" type="primary" block disabled={extracting} loading={extracting}
+                onClick={() => {
+                  if (!book || extracting) return
+                  setExtracting(true)
+                  const bid = book.id
+                  api.extractKnowledge(bid).then(() => {
+                    const poll = setInterval(async () => {
+                      try {
+                        const data = await api.getKnowledgeGraph(bid)
+                        if (data.nodes && data.nodes.length) {
+                          clearInterval(poll); setExtracting(false)
+                          setGraphExists(true); setGraphData(data)
+                          notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
+                          loadGraph(bid)
+                        }
+                      } catch {}
+                    }, 10000)
+                  })
+                }}>
+                {extracting ? '生成中...' : graphExists ? '重新生成' : '生成图谱'}
+              </Button>
+            </div>
           </div>
         )}
         {/* 实体详情弹窗 */}
