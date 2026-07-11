@@ -50,7 +50,9 @@ def get_translator():
 
 def get_knowledge_extractor():
     from services.knowledge_extractor import KnowledgeExtractor
-    return _get_service('knowledge_extractor', KnowledgeExtractor)
+    from core.translator_config import load_config
+    cfg = load_config()
+    return _get_service('knowledge_extractor', lambda: KnowledgeExtractor(config=cfg))
 
 
 def get_ocr_service():

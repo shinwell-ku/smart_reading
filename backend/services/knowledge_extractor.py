@@ -1,54 +1,206 @@
 """
-知识抽取服务 — 基于规则的知识图谱提取
+知识抽取服务 — 规则 / LLM 知识图谱提取
 """
 import os
 import re
 import json
 import hashlib
 
+# LLM 抽取指令模板
+EXTRACT_SYSTEM_PROMPT = """你是一个知识图谱构建专家。分析文本，提取其中的实体和关系。
+
+要求：
+1. 实体：重要概念、术语、技术、人物、方法等
+2. 关系：实体之间的因果关系、包含关系、依赖关系、关联关系等
+3. 属性：实体的关键特征
+
+只返回 JSON 格式：
+{
+  "entities": [
+    {"name": "实体名", "type": "concept|technology|method|person|term", "description": "简要描述"}
+  ],
+  "relations": [
+    {"source": "实体A", "target": "实体B", "type": "causality|contains|depends_on|related_to", "description": "关系描述"}
+  ]
+}
+不要包含任何其他文字，只返回 JSON。"""
+
 
 class KnowledgeExtractor:
     """知识抽取引擎 — 从书籍文本中提取结构化知识，输出图谱节点和边数据"""
 
-    def __init__(self):
+    def __init__(self, config=None):
+        self._config = config  # TranslatorConfig，复用远程 LLM 配置
         self.CHINESE_PUNCT = r'，。、；：？！""''（）【】《》—…·'
 
+    def _reload_config(self):
+        """热加载配置"""
+        try:
+            from core.translator_config import load_config
+            self._config = load_config()
+        except Exception:
+            pass
+
     def extract(self, full_text):
-        """
-        从全文提取知识结构
-        返回：
-        {
-            "nodes": [...],
-            "edges": [...],
-            "outline": [...]
-        }
-        """
+        """从全文提取知识结构"""
+        self._reload_config()
         if not full_text or not full_text.strip():
             return {"nodes": [], "edges": [], "outline": []}
 
-        # 1. 文本分块预处理
-        chunks = self._split_into_chunks(full_text)
+        # 远程 LLM 模式
+        if self._config and self._config.mode == 'remote':
+            return self._extract_with_llm(full_text)
 
-        # 2. 层级大纲提取
+        # 规则模式
+        chunks = self._split_into_chunks(full_text)
+        outline = self._extract_outline(full_text)
+        concepts = self._extract_concepts(chunks)
+        relations = self._identify_relations(chunks, concepts)
+        nodes = self._build_nodes(outline, concepts, full_text)
+        edges = self._build_edges(nodes, relations)
+        return {"nodes": nodes, "edges": edges, "outline": outline}
+
+    def _call_llm(self, text):
+        """调用远程 LLM"""
+        cfg = self._config
+        if not cfg or cfg.mode != 'remote' or not cfg.remote.api_base or not cfg.remote.api_key:
+            return None
+        try:
+            from openai import OpenAI
+            client = OpenAI(base_url=cfg.remote.api_base, api_key=cfg.remote.api_key)
+            resp = client.chat.completions.create(
+                model=cfg.remote.model,
+                messages=[
+                    {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"请分析以下文本：\n\n{text}"},
+                ],
+                max_tokens=cfg.remote.max_tokens,
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            content = resp.choices[0].message.content.strip()
+            return json.loads(content)
+        except Exception as e:
+            print(f"[知识抽取] LLM 调用失败: {e}")
+            return None
+
+    def _extract_with_llm(self, full_text):
+        """LLM 分块抽取 + 合并"""
+        chunks = self._split_into_chunks(full_text, chunk_size=2000, overlap=200)
+        all_entities = {}
+        all_relations = []
+        seen_rels = set()
+
+        for i, chunk in enumerate(chunks):
+            print(f"[知识抽取] LLM 处理第 {i+1}/{len(chunks)} 块...")
+            result = self._call_llm(chunk["text"])
+            if not result:
+                continue
+
+            for e in result.get("entities", []):
+                name = e.get("name", "").strip()
+                if name and name not in all_entities:
+                    all_entities[name] = {
+                        "name": name,
+                        "type": e.get("type", "concept"),
+                        "description": e.get("description", "")[:100],
+                    }
+
+            for r in result.get("relations", []):
+                src = r.get("source", "").strip()
+                tgt = r.get("target", "").strip()
+                if src and tgt:
+                    rel_key = f"{src}|{tgt}|{r.get('type', 'related_to')}"
+                    if rel_key not in seen_rels:
+                        seen_rels.add(rel_key)
+                        all_relations.append({
+                            "source_label": src,
+                            "target_label": tgt,
+                            "type": r.get("type", "related_to"),
+                            "label": r.get("description", ""),
+                        })
+
+        print(f"[知识抽取] LLM 完成: {len(all_entities)} 实体, {len(all_relations)} 关系")
+
+        # 用规则模式提取大纲（章节结构）
         outline = self._extract_outline(full_text)
 
-        # 3. 概念实体抽取
-        concepts = self._extract_concepts(chunks)
+        # 构建图谱
+        nodes = self._build_nodes_from_llm(all_entities, outline, full_text)
+        edges = self._build_edges_from_llm(nodes, all_relations)
 
-        # 4. 逻辑关系识别
-        relations = self._identify_relations(chunks, concepts)
+        return {"nodes": nodes, "edges": edges, "outline": outline}
 
-        # 5. 构建图谱节点
-        nodes = self._build_nodes(outline, concepts, full_text)
+    def _build_nodes_from_llm(self, entities, outline, full_text):
+        """LLM 模式构建节点"""
+        nodes = []
+        node_id_counter = [0]
 
-        # 6. 构建图谱边
-        edges = self._build_edges(nodes, relations)
+        def gen_id():
+            node_id_counter[0] += 1
+            return f"node_{node_id_counter[0]}"
 
-        return {
-            "nodes": nodes,
-            "edges": edges,
-            "outline": outline
-        }
+        # 根节点
+        root_id = gen_id()
+        first_line = full_text.strip().split('\n')[0] if full_text.strip() else "知识图谱"
+        nodes.append({
+            "id": root_id, "label": first_line[:30] if len(first_line) > 3 else "知识图谱",
+            "type": "root", "level": 0, "parent_id": None,
+            "chapter": "", "description": "书籍根节点", "page_num": 0
+        })
+
+        # 章节节点
+        chapter_ids = {}
+        for i, ch in enumerate(outline):
+            ch_id = f"chapter_{i+1}"
+            chapter_ids[ch["title"]] = ch_id
+            nodes.append({
+                "id": ch_id, "label": ch["title"],
+                "type": "chapter", "level": 1, "parent_id": root_id,
+                "chapter": ch["title"], "description": f"章节: {ch['title']}", "page_num": 0
+            })
+            node_id_counter[0] += 1
+
+        # 实体节点
+        for name, ent in list(entities.items())[:80]:
+            nodes.append({
+                "id": gen_id(), "label": name,
+                "type": ent.get("type", "concept"), "level": 2,
+                "parent_id": root_id, "chapter": "",
+                "description": ent.get("description", "")[:80], "page_num": 0
+            })
+
+        return nodes
+
+    def _build_edges_from_llm(self, nodes, relations):
+        """LLM 模式构建边"""
+        label_to_id = {}
+        for node in nodes:
+            if node["label"] not in label_to_id:
+                label_to_id[node["label"]] = node["id"]
+
+        edges = []
+        # 父子关系
+        for node in nodes:
+            if node["parent_id"] and node["parent_id"] != node["id"]:
+                if any(n["id"] == node["parent_id"] for n in nodes):
+                    edges.append({
+                        "source": node["parent_id"], "target": node["id"],
+                        "type": "hierarchy", "label": "包含"
+                    })
+
+        # LLM 关系
+        for rel in relations:
+            src_id = label_to_id.get(rel["source_label"])
+            tgt_id = label_to_id.get(rel["target_label"])
+            if src_id and tgt_id and src_id != tgt_id:
+                dup = any(e["source"] == src_id and e["target"] == tgt_id for e in edges)
+                if not dup:
+                    edges.append({
+                        "source": src_id, "target": tgt_id,
+                        "type": rel["type"], "label": rel.get("label", ""),
+                    })
+        return edges
 
     def _split_into_chunks(self, text, chunk_size=1000, overlap=100):
         """将长文本分割为重叠块"""
