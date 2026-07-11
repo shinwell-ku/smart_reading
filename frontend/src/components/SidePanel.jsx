@@ -430,8 +430,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   </div>
                 )}
                 <Button size="small" type={showEntityList ? 'primary' : 'default'} onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>{showEntityList ? '隐藏列表' : '列表'}</Button>
-                <Tooltip title="放大"><Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} /></Tooltip>
                 <Tooltip title="缩小"><Button size="small" icon={<ZoomOutOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} /></Tooltip>
+                <Tooltip title="放大"><Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} /></Tooltip>
                 <Tooltip title="重置视图"><Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button></Tooltip>
                 <Button size="small" danger onClick={async () => { if (!book || !graphExists) return; await api.deleteKnowledgeGraph(book.id); setGraphExists(false); setGraphData(null); setSelectedEntity(null); if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null } }}>清除</Button>
               </div>
