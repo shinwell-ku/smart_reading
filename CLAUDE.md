@@ -10,7 +10,7 @@ AI智慧阅读 — 纯本地离线 AI 智能阅读软件。四层架构：Electr
 
 前端采用 **React 18 + Ant Design 5 + react-pdf**
 
-Tech: **Electron 28** / **react-pdf** / **ECharts 6** / **Ant Design 5** / **Flask 3.0** / **SQLAlchemy 2.0** / **Pydantic 2** / **PyMuPDF** / **PyTorch 2.2** (CPU) / **Transformers 4** / **PaddleOCR** / **openai 2** / **SQLite** (WAL)
+Tech: **Electron 28** / **react-pdf** / **ECharts 6** / **Ant Design 5** / **Flask 3.0** / **SQLAlchemy 2.0** / **Pydantic 2** / **PyMuPDF** / **PyTorch 2.2** (CPU) / **Transformers 4** / **openai 2** / **SQLite** (WAL)
 
 ## Key Commands
 

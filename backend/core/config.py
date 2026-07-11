@@ -55,6 +55,3 @@ def get_knowledge_extractor():
     return _get_service('knowledge_extractor', lambda: KnowledgeExtractor(config=cfg))
 
 
-def get_ocr_service():
-    from services.ocr_service import OCRService
-    return _get_service('ocr_service', lambda: OCRService(MODELS_DIR))

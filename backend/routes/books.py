@@ -153,27 +153,7 @@ def import_book_by_path():
         except Exception:
             pass
 
-        # 扫描版 PDF：后台启动 OCR
-        if result.get('is_scan_pdf') and result.get('total_pages', 0) > 0:
-            def ocr_task(bid, fp):
-                try:
-                    from services.ocr_service import OCRService
-                    from core.config import MODELS_DIR
-                    ocr = OCRService(MODELS_DIR)
-                    texts = ocr.recognize_full_pdf(fp)
-                    # 保存 OCR 结果
-                    pages_path = os.path.join(CACHE_DIR, f'book_{bid}_pages.json')
-                    text_path = os.path.join(CACHE_DIR, f'book_{bid}_text.txt')
-                    with open(pages_path, 'w', encoding='utf-8') as f:
-                        json.dump(texts, f, ensure_ascii=False)
-                    with open(text_path, 'w', encoding='utf-8') as f:
-                        f.write('\n'.join(texts))
-                    print(f"[OCR] 书籍 {bid} OCR 完成")
-                except Exception as e:
-                    print(f"[OCR] 失败: {e}")
-            import threading
-            thread = threading.Thread(target=ocr_task, args=(book.id, dest_path), daemon=True)
-            thread.start()
+
 
         return jsonify(BookImportResult(
             book_id=book.id, title=book.title,
