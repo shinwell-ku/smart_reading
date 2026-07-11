@@ -502,6 +502,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               </>
             )}
             <div style={{ marginTop: 'auto' }}>
+            {!graphExists && (
               <Button size="small" type="primary" block loading={pollRef.current !== null}
                 disabled={pollRef.current !== null}
                 onClick={() => {
@@ -529,6 +530,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 }}>
                 {pollRef.current ? '生成中...' : '生成图谱'}
               </Button>
+            )}
             </div>
             {graphExists && (
               <Button size="small" type={pollRef.current ? 'default' : 'primary'}
