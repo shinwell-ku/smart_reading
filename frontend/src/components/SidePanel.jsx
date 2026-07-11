@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
-import { Select, Button, Input, message, notification } from 'antd'
+import { Select, Button, Input, message, notification, Modal } from 'antd'
 import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
