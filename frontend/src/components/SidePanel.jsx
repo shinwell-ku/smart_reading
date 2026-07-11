@@ -294,7 +294,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>暂无生词，翻译时会自动记录</div>
               ) : (
                 words.map((w, i) => (
-                  <div key={w.id || i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12 }}>
+                  <div key={w.id || i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12, position: 'relative' }}>
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ position: 'absolute', top: 2, right: 2, width: 22, height: 22, minWidth: 0 }}
+                      onClick={async () => { await api.deleteWord(w.id); setWords(words.filter(x => x.id !== w.id)) }} />
                     <div style={{ fontWeight: 600, color: '#303133', marginBottom: 2 }}>{w.word}</div>
                     <div style={{ color: '#1677ff', marginBottom: 2 }}>{w.translation}</div>
                     <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399' }}>

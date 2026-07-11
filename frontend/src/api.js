@@ -36,6 +36,7 @@ export const api = {
   getTranslationStatus: (bid) => req('GET', `/api/translate/status/${bid}`),
   saveWord: (data) => req('POST', '/api/translate/words', data),
   getWords: (bid) => req('GET', `/api/translate/words/${bid}`),
+  deleteWord: (wid) => req('DELETE', `/api/translate/words/${wid}`),
   getKnowledgeGraph: (bid) => req('GET', `/api/knowledge/graph/${bid}`),
   extractKnowledge: (bid) => req('POST', `/api/knowledge/extract/${bid}`),
   deleteKnowledgeGraph: (bid) => req('DELETE', `/api/knowledge/graph/${bid}`),

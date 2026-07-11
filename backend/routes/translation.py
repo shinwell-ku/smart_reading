@@ -122,3 +122,13 @@ def get_words(book_id):
     words = db.query(Vocabulary).filter_by(book_id=book_id).order_by(Vocabulary.id.desc()).all()
     items = [WordResponse.model_validate(w) for w in words]
     return jsonify(WordListResponse(words=items).model_dump())
+
+
+@translation_bp.route('/words/<int:word_id>', methods=['DELETE'])
+def delete_word(word_id):
+    db = get_db()
+    w = db.query(Vocabulary).get(word_id)
+    if w:
+        db.delete(w)
+        db.commit()
+    return jsonify({"message": "已删除"})
