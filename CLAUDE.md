@@ -117,9 +117,9 @@ data/
 | Model | What it does | Fallback without it |
 |-------|-------------|---------------------|
 | **NLLB-200** | 200-language translation (local mode) | Rule-based translation (basic EN/CN only), or Remote LLM |
-| **BERT** | Chinese knowledge extraction | Regex-based extraction (lower accuracy) |
+| **BERT** (已移除) | 知识抽取（已由规则替代） | Regex-based extraction |
 
-Both are **optional** — the app degrades gracefully without them.
+两个模型均为**可选** — 不下载也不影响程序运行。
 
 ### NLLB-200 Model State (as of 2026-07-04)
 

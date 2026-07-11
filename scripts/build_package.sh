@@ -56,8 +56,8 @@ fi
 
 echo "[3/5] 复制 AI 模型..."
 if [ -d "$DATA_SRC/models" ] && [ "$(ls -A "$DATA_SRC/models" 2>/dev/null)" ]; then
-  rsync -a "$DATA_SRC/models/" "$RES_DIR/data/models/"
-  echo "  模型已打包"
+  rsync -a --exclude='bert4cls_small' "$DATA_SRC/models/" "$RES_DIR/data/models/"
+  echo "  模型已打包（排除 BERT）"
 else
   mkdir -p "$RES_DIR/data/models"
   echo "  无模型，跳过"

@@ -1,67 +1,17 @@
 """
-AI 知识抽取服务 - 基于 BERT 的离线知识抽取
-自动抽取：概念实体、逻辑关系、层级大纲、案例论据
+知识抽取服务 — 基于规则的知识图谱提取
 """
 import os
 import re
 import json
-import threading
 import hashlib
 
 
 class KnowledgeExtractor:
-    """
-    知识抽取引擎
-    从书籍文本中自动提取结构化知识，输出图谱节点和边数据
-    """
+    """知识抽取引擎 — 从书籍文本中提取结构化知识，输出图谱节点和边数据"""
 
-    def __init__(self, models_dir):
-        self.models_dir = models_dir
-        self._model = None
-        self._lock = threading.Lock()
-
-        # 中文标点符号
+    def __init__(self):
         self.CHINESE_PUNCT = r'，。、；：？！""''（）【】《》—…·'
-
-    def _load_model(self):
-        """惰性加载知识抽取模型"""
-        if self._model is not None:
-            return
-
-        with self._lock:
-            if self._model is not None:
-                return
-
-            try:
-                # 只检查本地量化模型，禁止联网下载
-                local_model_path = os.path.join(self.models_dir, 'bert4cls_small')
-                if os.path.exists(local_model_path):
-                    from transformers import AutoTokenizer, AutoModelForSequenceClassification
-                    import torch
-
-                    print(f"[知识抽取] 加载本地量化模型: {local_model_path}")
-                    self._tokenizer = AutoTokenizer.from_pretrained(
-                        local_model_path,
-                        local_files_only=True,
-                        trust_remote_code=True
-                    )
-                    self._model = AutoModelForSequenceClassification.from_pretrained(
-                        local_model_path,
-                        local_files_only=True,
-                        torch_dtype=torch.float32,
-                        low_cpu_mem_usage=True,
-                        trust_remote_code=True
-                    )
-                    self._model.eval()
-                    print("[知识抽取] 模型加载完成")
-                else:
-                    print(f"[知识抽取] 未找到本地模型: {local_model_path}")
-                    print(f"[知识抽取] 将使用规则抽取模式")
-
-            except Exception as e:
-                print(f"[知识抽取] 模型加载失败: {e}，使用规则抽取模式")
-                self._model = None
-                self._tokenizer = None
 
     def extract(self, full_text):
         """

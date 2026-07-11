@@ -50,7 +50,7 @@ def get_translator():
 
 def get_knowledge_extractor():
     from services.knowledge_extractor import KnowledgeExtractor
-    return _get_service('knowledge_extractor', lambda: KnowledgeExtractor(MODELS_DIR))
+    return _get_service('knowledge_extractor', KnowledgeExtractor)
 
 
 def get_ocr_service():
