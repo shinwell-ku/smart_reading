@@ -242,6 +242,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       }
       setGraphExists(true)
       setGraphData(data)
+      setGenerating(false)
       renderGraph(data, graphLayout, graphLabels, graphEdges, graphRepulsion)
     } catch (e) { console.error('[图谱] 加载失败:', e) }
   }
