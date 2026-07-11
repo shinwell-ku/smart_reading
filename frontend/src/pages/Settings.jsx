@@ -124,7 +124,7 @@ export default function Settings({ open, onClose }) {
                 <Card size="small" style={{ marginBottom: 12, background: '#fafafa' }} bordered={false}>
                   <div style={{ fontSize: 12, color: '#909399', marginBottom: 4 }}>选择翻译和知识图谱使用的 AI 引擎</div>
                   <Radio.Group value={mode} onChange={e => setMode(e.target.value)}>
-                    <Radio value="local"><Tag color="blue">本地</Tag> NLLB-200 离线翻译 + 规则知识抽取</Radio>
+                    <Radio value="local"><Tag color="blue">本地</Tag> 离线翻译 + 规则知识抽取</Radio>
                     <br />
                     <Radio value="remote" style={{ marginTop: 6 }}><Tag color="green">远程</Tag> LLM 翻译 + LLM 知识抽取</Radio>
                   </Radio.Group>
