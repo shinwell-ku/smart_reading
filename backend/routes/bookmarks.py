@@ -12,7 +12,7 @@ bookmarks_bp = Blueprint('bookmarks', __name__, url_prefix='/api')
 @bookmarks_bp.route('/books/<int:book_id>/bookmarks', methods=['GET'])
 def get_bookmarks(book_id):
     db = get_db()
-    bms = db.query(Bookmark).filter_by(book_id=book_id).order_by(Bookmark.page_num.asc()).all()
+    bms = db.query(Bookmark).filter_by(book_id=book_id).order_by(Bookmark.created_at.desc()).all()
     items = [BookmarkResponse.model_validate(b) for b in bms]
     return jsonify(BookmarkListResponse(bookmarks=items).model_dump())
 
