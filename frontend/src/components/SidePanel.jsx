@@ -465,8 +465,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               )}
               {extracting && (
                 <div style={{ textAlign: 'center', color: '#909399', padding: 30, fontSize: 12 }}>
-                  <div style={{ fontSize: 32, marginBottom: 6 }}>⏳</div>
-                  知识抽取中
+                  <Spin style={{ fontSize: 32, marginBottom: 6 }} />
+                  <div>知识抽取中</div>
                 </div>
               )}
             </div>
