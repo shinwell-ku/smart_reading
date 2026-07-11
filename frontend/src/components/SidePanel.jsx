@@ -488,7 +488,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   {!graphExists && !pollRef.current && (
                     <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 30, fontSize: 12 }}>
                       <div style={{ fontSize: 32, marginBottom: 6 }}>🔗</div>
-                      生成图谱后，可点击节点查看详情<br/>双击节点跳转到原文
+                      点击下方按钮生成知识图谱
                     </div>
                   )}
                   {pollRef.current && (
@@ -501,8 +501,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               </div>
               </>
             )}
+            <div style={{ marginTop: 'auto' }}>
             {!graphExists && !pollRef.current && (
-              <Button size="small" type="primary"
+              <Button size="small" type="primary" block
                 onClick={() => {
                   if (!book || pollRef.current) return
                   pollRef.current = 'lock'
@@ -529,6 +530,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 生成图谱
               </Button>
             )}
+            </div>
             {graphExists && (
               <Button size="small" type={pollRef.current ? 'default' : 'primary'}
                 disabled={pollRef.current !== null}
