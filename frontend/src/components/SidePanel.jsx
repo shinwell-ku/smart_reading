@@ -516,8 +516,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                           clearInterval(poll)
                           setGenerating(false)
                           setGraphExists(true)
+                          setGraphData(data)
                           notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
-                          if (activeTab === 'knowledge') loadGraph(bid)
+                          loadGraph(bid)
                         }
                       } catch {}
                     }, 10000)
@@ -545,8 +546,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                         if (data.nodes && data.nodes.length) {
                           clearInterval(poll); setGenerating(false)
                           setGraphExists(true)
+                          setGraphData(data)
                           notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
-                          if (activeTab === 'knowledge') loadGraph(bid)
+                          loadGraph(bid)
                         }
                       } catch {}
                     }, 10000)
