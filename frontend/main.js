@@ -7,6 +7,8 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+app.setName('AI智慧阅读');
+
 // ============================================================
 // 全局状态
 // ============================================================
