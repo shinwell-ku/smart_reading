@@ -294,10 +294,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>暂无生词，翻译时会自动记录</div>
               ) : (
                 words.map((w, i) => (
-                  <div key={w.id || i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12, position: 'relative' }}>
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ position: 'absolute', top: 2, right: 2, width: 22, height: 22, minWidth: 0 }}
-                      onClick={async () => { await api.deleteWord(w.id); setWords(words.filter(x => x.id !== w.id)) }} />
-                    <div style={{ fontWeight: 600, color: '#303133', marginBottom: 2 }}>{w.word}</div>
+                  <div key={w.id || i} style={{ padding: '8px 8px 4px', marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12, position: 'relative' }}>
+                    <div style={{ fontWeight: 600, color: '#303133', marginBottom: 2, paddingRight: 20 }}>{w.word}</div>
                     <div style={{ color: '#1677ff', marginBottom: 2 }}>{w.translation}</div>
                     <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399' }}>
                       {w.page_num > 0 && (
@@ -306,6 +304,10 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                         </span>
                       )}
                       <span>{w.created_at || ''}</span>
+                    </div>
+                    <div style={{ textAlign: 'right', marginTop: 2 }}>
+                      <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }}
+                        onClick={async () => { await api.deleteWord(w.id); setWords(words.filter(x => x.id !== w.id)) }} />
                     </div>
                   </div>
                 ))
@@ -327,7 +329,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <div key={n.id} style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), background: '#f5f7fa', fontSize: 12 }}>
                   <div>{n.content}</div>
                   <div style={{ fontSize: 11, color: '#909399', marginTop: 2 }}>第{n.page_num}页 · {n.created_at || ''}</div>
-                  <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => deleteNote(n.id)} />
+                  <div style={{ textAlign: 'right', marginTop: 2 }}>
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={() => deleteNote(n.id)} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -337,35 +341,39 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
           <div className="panel-body" style={{ flex: 1 }}>
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto' }}>
               {bookmarks.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无书签</div> : bookmarks.map(b => (
-                <div key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', fontSize: 12, borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
-                  onClick={() => { if (editingBmId !== b.id) window.dispatchEvent(new CustomEvent('go-to-page', { detail: b.page_num })) }}>
-                  <div style={{ flex: 1, minWidth: 0, marginRight: 8 }} onClick={e => e.stopPropagation()}>
-                    {editingBmId === b.id ? (
-                      <Input size="small" value={editingBmTitle} autoFocus
-                        onChange={e => setEditingBmTitle(e.target.value)}
-                        onBlur={async () => {
-                          if (editingBmTitle.trim()) {
-                            await api.updateBookmark(b.id, { title: editingBmTitle.trim() })
-                            const r = await api.getBookmarks(book.id)
-                            setBookmarks(r.bookmarks || [])
-                          }
-                          setEditingBmId(null)
-                        }}
-                        onPressEnter={async () => {
-                          if (editingBmTitle.trim()) {
-                            await api.updateBookmark(b.id, { title: editingBmTitle.trim() })
-                            const r = await api.getBookmarks(book.id)
-                            setBookmarks(r.bookmarks || [])
-                          }
-                          setEditingBmId(null)
-                        }}
-                      />
-                    ) : (
-                      <span onClick={() => { setEditingBmId(b.id); setEditingBmTitle(b.title || `第${b.page_num}页`) }} style={{ color: '#303133' }}>{b.title || `第${b.page_num}页`}</span>
-                    )}
+                <div key={b.id} style={{ padding: '6px 8px', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                    onClick={() => { if (editingBmId !== b.id) window.dispatchEvent(new CustomEvent('go-to-page', { detail: b.page_num })) }}>
+                    <div style={{ flex: 1, minWidth: 0 }} onClick={e => e.stopPropagation()}>
+                      {editingBmId === b.id ? (
+                        <Input size="small" value={editingBmTitle} autoFocus
+                          onChange={e => setEditingBmTitle(e.target.value)}
+                          onBlur={async () => {
+                            if (editingBmTitle.trim()) {
+                              await api.updateBookmark(b.id, { title: editingBmTitle.trim() })
+                              const r = await api.getBookmarks(book.id)
+                              setBookmarks(r.bookmarks || [])
+                            }
+                            setEditingBmId(null)
+                          }}
+                          onPressEnter={async () => {
+                            if (editingBmTitle.trim()) {
+                              await api.updateBookmark(b.id, { title: editingBmTitle.trim() })
+                              const r = await api.getBookmarks(book.id)
+                              setBookmarks(r.bookmarks || [])
+                            }
+                            setEditingBmId(null)
+                          }}
+                        />
+                      ) : (
+                        <span onClick={() => { setEditingBmId(b.id); setEditingBmTitle(b.title || `第${b.page_num}页`) }} style={{ color: '#303133' }}>{b.title || `第${b.page_num}页`}</span>
+                      )}
+                    </div>
+                    <span style={{ color: '#909399', flexShrink: 0, fontSize: 11 }}>第{b.page_num}页 {b.created_at || ''}</span>
                   </div>
-                  <span style={{ color: '#909399', flexShrink: 0, fontSize: 11, marginRight: 4 }}>第{b.page_num}页 {b.created_at || ''}</span>
-                  <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }} />
+                  <div style={{ textAlign: 'right', marginTop: 2 }}>
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }} />
+                  </div>
                 </div>
               ))}
             </div>
