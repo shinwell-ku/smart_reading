@@ -476,6 +476,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 onClick={() => {
                   if (!book || extracting) return
                   setExtracting(true)
+                  if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null }
+                  setGraphExists(false); setGraphData(null); setSelectedEntity(null)
                   const bid = book.id
                   api.extractKnowledge(bid).then(() => {
                     const poll = setInterval(async () => {
