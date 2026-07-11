@@ -1,6 +1,7 @@
 """
 书签路由
 """
+from datetime import datetime
 from flask import Blueprint, jsonify, request
 from core.database import get_db
 from models import Bookmark
@@ -25,6 +26,7 @@ def add_bookmark(book_id):
         book_id=book_id,
         page_num=data.page_num,
         title=data.title or f'第{data.page_num}页',
+        created_at=datetime.now().strftime('%Y-%m-%d %H:%M'),
     )
     db.add(bm)
     db.commit()

@@ -1,6 +1,7 @@
 """
 笔记路由
 """
+from datetime import datetime
 from flask import Blueprint, jsonify, request
 from core.database import get_db
 from models import Note
@@ -27,6 +28,7 @@ def add_note(book_id):
         content=data.content,
         selected_text=data.selected_text,
         color=data.color,
+        created_at=datetime.now().strftime('%Y-%m-%d %H:%M'),
     )
     db.add(note)
     db.commit()

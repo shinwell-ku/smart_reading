@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message, notification, Modal } from 'antd'
-import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
   if (!text) return ''
@@ -297,12 +297,14 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   <div key={w.id || i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12 }}>
                     <div style={{ fontWeight: 600, color: '#303133', marginBottom: 2 }}>{w.word}</div>
                     <div style={{ color: '#1677ff', marginBottom: 2 }}>{w.translation}</div>
-                    {w.page_num > 0 && (
-                      <div style={{ color: '#909399', fontSize: 11, cursor: 'pointer' }}
-                        onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: w.page_num }))}>
-                        第{w.page_num}页 →
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399' }}>
+                      {w.page_num > 0 && (
+                        <span style={{ cursor: 'pointer' }} onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: w.page_num }))}>
+                          第{w.page_num}页
+                        </span>
+                      )}
+                      <span>{w.created_at || ''}</span>
+                    </div>
                   </div>
                 ))
               )}
@@ -322,7 +324,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               {notes.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无笔记</div> : notes.map(n => (
                 <div key={n.id} style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), background: '#f5f7fa', fontSize: 12 }}>
                   <div>{n.content}</div>
-                  <div style={{ fontSize: 11, color: '#909399' }}>第{n.page_num}页</div>
+                  <div style={{ fontSize: 11, color: '#909399', marginTop: 2 }}>第{n.page_num}页 · {n.created_at || ''}</div>
                   <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => deleteNote(n.id)} />
                 </div>
               ))}
@@ -360,7 +362,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                       <span onClick={() => { setEditingBmId(b.id); setEditingBmTitle(b.title || `第${b.page_num}页`) }} style={{ color: '#303133' }}>{b.title || `第${b.page_num}页`}</span>
                     )}
                   </div>
-                  <span style={{ color: '#909399', flexShrink: 0, fontSize: 11, marginRight: 4 }}>第{b.page_num}页</span>
+                  <span style={{ color: '#909399', flexShrink: 0, fontSize: 11, marginRight: 4 }}>第{b.page_num}页 {b.created_at || ''}</span>
                   <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={async (e) => { e.stopPropagation(); await api.deleteBookmark(b.id); const r = await api.getBookmarks(book.id); setBookmarks(r.bookmarks || []) }} />
                 </div>
               ))}
@@ -438,8 +440,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>
                   {showEntityList ? '隐藏列表' : '列表'}
                 </Button>
-                <Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} style={{ fontSize: 13, lineHeight: 1, padding: '0 6px' }}>＋</Button>
-                <Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} style={{ fontSize: 13, lineHeight: 1, padding: '0 6px' }}>−</Button>
+                <Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} />
+                <Button size="small" icon={<ZoomOutOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} />
                 <Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button>
                 <Button size="small" danger onClick={async () => {
                   if (!book || !graphExists) return

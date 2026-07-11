@@ -4,6 +4,7 @@
 import os
 import json
 import threading
+from datetime import datetime
 from flask import Blueprint, jsonify, request
 from core.database import get_db
 from core.config import CACHE_DIR
@@ -108,6 +109,7 @@ def save_word():
         translation=data.translation,
         context=data.context,
         page_num=data.page_num,
+        created_at=datetime.now().strftime('%Y-%m-%d %H:%M'),
     )
     db.add(word)
     db.commit()
