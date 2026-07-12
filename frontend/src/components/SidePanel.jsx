@@ -101,7 +101,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       setResultText(r.translated_text || '翻译失败')
       // 自动保存生词
       if (r.translated_text && book) {
-        api.saveWord({ book_id: book.id, word: t.slice(0, 100), translation: r.translated_text.slice(0, 200), page_num: page }).then(() => {
+        api.saveWord({ book_id: book.id, word: t, translation: r.translated_text || '', page_num: page }).then(() => {
           setWordRefresh(n => n + 1)
         }).catch(() => {})
       }
@@ -325,7 +325,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <div key={n.id} style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), background: '#f5f7fa', fontSize: 12 }}>
                   <div>{n.content}</div>
                   <div style={{ display: 'flex', fontSize: 11, color: '#909399', marginTop: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>第{n.page_num}页 · {n.created_at || ''}</span>
+                    <span>第{n.page_num}页 {n.created_at || ''}</span>
                     <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={() => deleteNote(n.id)} />
                   </div>
                 </div>
@@ -402,7 +402,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                     return (
                       <div key={i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, cursor: 'pointer', background: '#fafafa' }}
                         onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: page }))}>
-                        <div style={{ color: '#1677ff', marginBottom: 4 }}>第{page}页 · 行{r.line || i + 1}</div>
+                        <div style={{ color: '#1677ff', marginBottom: 4 }}>第{page}页 行{r.line || i + 1}</div>
                         <div style={{ color: '#606266', lineHeight: 1.6, wordBreak: 'break-all' }} dangerouslySetInnerHTML={{
                           __html: (r.context || r.matched || '').replace(new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<span style="background:#ffd43b;padding:0 2px">${m}</span>`)
                         }} />
