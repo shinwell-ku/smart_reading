@@ -34,7 +34,6 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [targetLang, setTargetLang] = useState('zh')
   const [notes, setNotes] = useState([])
   const [noteText, setNoteText] = useState('')
-  const noteEditorRef = useRef(null)
   const [noteColor, setNoteColor] = useState('#FFD700')
   const [bookmarks, setBookmarks] = useState([])
   const [words, setWords] = useState([])
@@ -119,15 +118,10 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   }
 
   const addNote = async () => {
-    if (!book) return
-    const html = noteEditorRef.current?.innerHTML || ''
-    // 去掉空标签
-    const clean = html.replace(/<br\s*\/?>/g, ' ').replace(/<(\w+)[^>]*>\s*<\/\1>/g, '').trim()
-    if (!clean) { message.info('请输入笔记内容'); return }
-    await api.addNote(book.id, { page_num: page, content: html, color: noteColor })
+    if (!book || !noteText.trim()) return
+    await api.addNote(book.id, { page_num: page, content: noteText, color: noteColor })
     message.success('笔记已添加')
     setNoteText('')
-    if (noteEditorRef.current) noteEditorRef.current.innerHTML = ''
     const r = await api.getNotes(book.id)
     setNotes(r.notes || [])
   }
@@ -319,29 +313,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         )}
         {activeTab === 'notes' && (
           <div className="panel-body" style={{ flex: 1 }}>
-            <div ref={noteEditorRef} contentEditable suppressContentEditableWarning
-              style={{ border: '1px solid #d9d9d9', borderRadius: 4, padding: '6px 8px', minHeight: 80, fontSize: 13, lineHeight: 1.6, overflowY: 'auto', outline: 'none', background: '#fff' }}
-              placeholder="输入笔记...（支持富文本和图片）"
-              onInput={e => setNoteText(e.currentTarget.innerHTML)}
-              onPaste={e => {
-                const items = e.clipboardData?.items || []
-                const imageItem = Array.from(items).find(i => i.type.startsWith('image/'))
-                if (imageItem) {
-                  e.preventDefault()
-                  const file = imageItem.getAsFile()
-                  if (!file) return
-                  const reader = new FileReader()
-                  reader.onload = () => {
-                    if (noteEditorRef.current) {
-                      noteEditorRef.current.focus()
-                      document.execCommand('insertHTML', false, `<img src="${reader.result}" style="max-width:100%;border-radius:4px" />`)
-                      setNoteText(noteEditorRef.current.innerHTML)
-                    }
-                  }
-                  reader.readAsDataURL(file)
-                }
-              }}>
-            </div>
+            <Input.TextArea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="输入笔记..." />
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {['#FFD700', '#FF6B6B', '#51CF66', '#339AF0', '#CC66FF'].map(c => (
                 <div key={c} onClick={() => setNoteColor(c)} style={{ width: 18, height: 18, borderRadius: '50%', background: c, cursor: 'pointer', border: noteColor === c ? '2px solid #303133' : '2px solid transparent', flexShrink: 0 }} />
@@ -351,7 +323,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
               {notes.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无笔记</div> : notes.map(n => (
                 <div key={n.id} style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), background: '#f5f7fa', fontSize: 12 }}>
-                  <div className="note-content" dangerouslySetInnerHTML={{ __html: n.content }} style={{ lineHeight: 1.6 }} />
+                  <div>{n.content}</div>
                   <div style={{ display: 'flex', fontSize: 11, color: '#909399', marginTop: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>第{n.page_num}页 {n.created_at || ''}</span>
                     <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={() => deleteNote(n.id)} />
