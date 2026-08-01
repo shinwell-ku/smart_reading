@@ -77,6 +77,11 @@ html, body, #root { height: 100%; overflow: hidden; font-family: -apple-system, 
 .panel-textarea textarea { height: 100% !important; resize: none; }
 .panel-scroll { flex: 1; overflow-y: auto; }
 .panel-graph { flex: 1; min-height: 150px; }
+/* 笔记富文本 */
+[contenteditable]:empty::before { content: attr(placeholder); color: #bfbfbf; }
+.note-content img { max-width: 100%; border-radius: 4px; }
+.note-content p { margin: 4px 0; }
+[contenteditable] img { max-width: 100%; border-radius: 4px; }
 
 /* Settings */
 .settings-view { padding: 20px 24px; max-width: 560px; overflow-y: auto; height: 100%; }
