@@ -11,7 +11,7 @@ export default function Reader({ book, onPageChange, onBack }) {
   const [numPages, setNumPages] = useState(0)
   const [page, setPage] = useState(1)       // 当前可见页
   const [scale, setScale] = useState(1)
-  const [docxFontSize, setDocxFontSize] = useState(15)
+  const [textFontSize, setTextFontSize] = useState(15)
   const [loading, setLoading] = useState(true)
   const [pdfData, setPdfData] = useState(null)
   const [docxContent, setDocxContent] = useState('')
@@ -24,9 +24,15 @@ export default function Reader({ book, onPageChange, onBack }) {
   const pdfRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(null)
 
-  const isDocx = book?.file_type === 'docx'
+  // pdf 走 react-pdf 画布；其余（docx / txt / md / html）都是文本分页渲染
+  const isText = !!book?.file_type && book.file_type !== 'pdf'
   const chapters = book?.chapters || []
   const [outlineOpen, setOutlineOpen] = useState(false)
+  // 目录面板宽度：可拖拽，记住上次的宽度
+  const [outlineWidth, setOutlineWidth] = useState(() => {
+    const saved = parseInt(localStorage.getItem('sr_outlineWidth'), 10)
+    return Number.isFinite(saved) ? Math.max(160, Math.min(420, saved)) : 220
+  })
   const [scrollPos, setScrollPos] = useState(0)  // 触发虚拟滚动重渲染
 
   // ─── 加载文档 ───
@@ -40,7 +46,7 @@ export default function Reader({ book, onPageChange, onBack }) {
     setNumPages(0)
     setPageOffsets([])
 
-    if (isDocx) {
+    if (isText) {
       ;(async () => {
         try {
           let restoredPage = 1
@@ -181,7 +187,7 @@ export default function Reader({ book, onPageChange, onBack }) {
   // 恢复到上次阅读位置
   useEffect(() => {
     if (!scrollRef.current || pageRef.current <= 1) return
-    if (isDocx) {
+    if (isText) {
       // DOCX：滚动到目标页
       const pages = scrollRef.current.querySelectorAll('.docx-page')
       const target = pages[pageRef.current - 1]
@@ -191,7 +197,7 @@ export default function Reader({ book, onPageChange, onBack }) {
       const target = pageOffsets[pageRef.current - 1]
       if (target !== undefined) scrollRef.current.scrollTop = target
     }
-  }, [pageOffsets, isDocx])
+  }, [pageOffsets, isText])
 
   // 从滚动位置找当前页
   const findPageFromScroll = useCallback((scrollTop) => {
@@ -205,7 +211,7 @@ export default function Reader({ book, onPageChange, onBack }) {
   // 滚动到指定页
   const scrollToPage = useCallback((pageNum) => {
     if (!scrollRef.current) return
-    if (isDocx) {
+    if (isText) {
       const pages = scrollRef.current.querySelectorAll('.docx-page')
       const target = pages[pageNum - 1]
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -213,7 +219,7 @@ export default function Reader({ book, onPageChange, onBack }) {
       const offset = pageOffsets[pageNum - 1]
       if (offset !== undefined) scrollRef.current.scrollTo({ top: offset, behavior: 'smooth' })
     }
-  }, [pageOffsets, isDocx])
+  }, [pageOffsets, isText])
 
   // 滚动处理
   let _scrollTimer = null
@@ -223,7 +229,7 @@ export default function Reader({ book, onPageChange, onBack }) {
     setScrollPos(scrollTop)
 
     let currentPage = 1
-    if (isDocx) {
+    if (isText) {
       // DOCX：根据可见区域判断当前页
       const pages = scrollRef.current.querySelectorAll('.docx-page')
       for (let i = 0; i < pages.length; i++) {
@@ -244,7 +250,7 @@ export default function Reader({ book, onPageChange, onBack }) {
       if (_scrollTimer) clearTimeout(_scrollTimer)
       _scrollTimer = setTimeout(() => saveProgress(currentPage), 500)
     }
-  }, [pageOffsets, onPageChange, isDocx])
+  }, [pageOffsets, onPageChange, isText])
 
   // 选中文本 → 广播
   const handleSelect = useCallback(() => {
@@ -273,29 +279,29 @@ export default function Reader({ book, onPageChange, onBack }) {
       else if (e.key === 'PageDown') { e.preventDefault(); scrollRef.current?.scrollBy({ top: scrollRef.current?.clientHeight * 0.8 || 400, behavior: 'smooth' }) }
       else if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault()
-        if (isDocx) setDocxFontSize(s => Math.min(36, s + 2))
+        if (isText) setTextFontSize(s => Math.min(36, s + 2))
         else setScale(s => Math.min(3, s + 0.2))
       }
       else if ((e.ctrlKey || e.metaKey) && (e.key === '-')) {
         e.preventDefault()
-        if (isDocx) setDocxFontSize(s => Math.max(9, s - 2))
+        if (isText) setTextFontSize(s => Math.max(9, s - 2))
         else setScale(s => Math.max(0.5, s - 0.2))
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [numPages, isDocx])
+  }, [numPages, isText])
 
   // Ctrl+滚轮 / 手势缩放（触控板双指捏合）
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const handler = (e) => {
-      if (!numPages && !isDocx) return
+      if (!numPages && !isText) return
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
-        if (isDocx) {
-          setDocxFontSize(s => Math.max(9, Math.min(36, s + (e.deltaY > 0 ? -2 : 2))))
+        if (isText) {
+          setTextFontSize(s => Math.max(9, Math.min(36, s + (e.deltaY > 0 ? -2 : 2))))
         } else {
           setScale(s => Math.max(0.5, Math.min(3, s + (e.deltaY > 0 ? -0.15 : 0.15))))
         }
@@ -303,7 +309,7 @@ export default function Reader({ book, onPageChange, onBack }) {
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
-  }, [numPages, isDocx])
+  }, [numPages, isText])
 
   // 接收书签跳转事件
   useEffect(() => {
@@ -352,14 +358,14 @@ export default function Reader({ book, onPageChange, onBack }) {
         <span className="reader-title">{book?.title || ''}</span>
         <Tooltip title="目录"><Button type="text" disabled={!chapters.length} onClick={() => setOutlineOpen(v => !v)} style={{ color: outlineOpen ? '#409eff' : undefined }} icon={<BarsOutlined />} /></Tooltip>
         <Tooltip title="缩小"><Button type="text" disabled={!numPages} icon={<ZoomOutOutlined />} onClick={() => {
-          if (isDocx) setDocxFontSize(s => Math.max(9, s - 2))
+          if (isText) setTextFontSize(s => Math.max(9, s - 2))
           else setScale(s => Math.max(0.5, s - 0.2))
         }} /></Tooltip>
         <span style={{ fontSize: 12, color: '#909399', minWidth: 36, textAlign: 'center' }}>
-          {isDocx ? Math.round(docxFontSize / 15 * 100) + '%' : Math.round(scale * 100) + '%'}
+          {isText ? Math.round(textFontSize / 15 * 100) + '%' : Math.round(scale * 100) + '%'}
         </span>
         <Tooltip title="放大"><Button type="text" disabled={!numPages} icon={<ZoomInOutlined />} onClick={() => {
-          if (isDocx) setDocxFontSize(s => Math.min(36, s + 2))
+          if (isText) setTextFontSize(s => Math.min(36, s + 2))
           else setScale(s => Math.min(3, s + 0.2))
         }} /></Tooltip>
         <Tooltip title="添加书签"><Button type="text" disabled={!numPages} icon={<StarOutlined />} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success('书签已添加: 第' + page + '页'); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }} /></Tooltip>
@@ -367,31 +373,58 @@ export default function Reader({ book, onPageChange, onBack }) {
       </div>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {outlineOpen && chapters.length > 0 && (
-          <div className="reader-outline">
-            <div style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, color: '#606266', borderBottom: '1px solid #e4e7ed' }}>目录</div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-              {renderChapters(chapters, 0, page, goTo)}
+          <>
+            <div className="reader-outline" style={{ width: outlineWidth }}>
+              <div style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, color: '#606266', borderBottom: '1px solid #e4e7ed' }}>目录</div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+                {renderChapters(chapters, 0, page, goTo)}
+              </div>
             </div>
-          </div>
+            {/* 拖动调宽：与右侧面板同一个 .split-handle 样式，方向相反（右拖变宽） */}
+            <div className="split-handle" title="拖动调整目录宽度"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                const startX = e.clientX
+                const startW = outlineWidth
+                const maxW = Math.min(420, window.innerWidth * 0.4)
+                let finalW = startW
+                document.body.style.userSelect = 'none'
+                document.body.style.cursor = 'col-resize'
+                const onMove = (ev) => {
+                  finalW = Math.max(160, Math.min(maxW, startW + (ev.clientX - startX)))
+                  setOutlineWidth(finalW)
+                }
+                const onUp = () => {
+                  document.removeEventListener('mousemove', onMove)
+                  document.removeEventListener('mouseup', onUp)
+                  document.body.style.userSelect = ''
+                  document.body.style.cursor = ''
+                  localStorage.setItem('sr_outlineWidth', finalW)
+                }
+                document.addEventListener('mousemove', onMove)
+                document.addEventListener('mouseup', onUp)
+              }}
+            />
+          </>
         )}
         {/* 滚动容器 */}
         <div className="pdf-container" ref={scrollRef} onScroll={handleScroll} onMouseUp={handleSelect}>
           {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>}
-          {!loading && isDocx && (
+          {!loading && isText && (
             <div style={{ width: '100%', maxWidth: 800, margin: '0 auto', padding: '16px 0' }}>
               {docxPages.map((pageText, idx) => (
                 <div key={idx} className="docx-page" data-page={idx + 1}
-                  style={{ background: '#fff', boxShadow: '0 1px 8px rgba(0,0,0,0.08)', borderRadius: 2, padding: '32px 48px', marginBottom: 12, lineHeight: 1.9, fontSize: docxFontSize, color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  style={{ background: '#fff', boxShadow: '0 1px 8px rgba(0,0,0,0.08)', borderRadius: 2, padding: '32px 48px', marginBottom: 12, lineHeight: 1.9, fontSize: textFontSize, color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {pageText}
                 </div>
               ))}
               {!docxPages.length && (docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>暂无内容</div>)}
             </div>
           )}
-          {!loading && !isDocx && pdfData && (
+          {!loading && !isText && pdfData && (
             <Document
               file={pdfData}
-              loading={<div style={{ padding: 40, color: '#909399', textAlign: 'center' }}>📖 正在加载 PDF...</div>}
+              loading={<div style={{ padding: 40, color: '#909399', textAlign: 'center' }}>📖 正在加载文档...</div>}
               onLoadSuccess={onLoadSuccess}
               onLoadError={(e) => { console.error('PDF error:', e); message.error(`PDF加载失败`) }}
             >

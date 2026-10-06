@@ -3,6 +3,7 @@
 """
 import os
 import json
+import time
 import threading
 from flask import Blueprint, jsonify, request, send_file
 from core.database import get_db
@@ -16,6 +17,22 @@ knowledge_bp = Blueprint('knowledge', __name__, url_prefix='/api/knowledge')
 _running_tasks = set()
 _running_tasks_lock = threading.Lock()
 
+# 抽取进度，供前端轮询。结构：
+# { book_id: {"stage","current","total","started_at","error"} }
+# 进程内内存态：重启后丢失，前端拿不到就退回"看图谱有没有生成"的老逻辑。
+_task_progress = {}
+
+# stage → 中文说明（写在这里，前端直接显示，避免两边文案各写一份）
+STAGE_TEXT = {
+    "indexing": "正在读取文本...",
+    "chunking": "正在分块...",
+    "outline": "正在提取章节大纲...",
+    "rules": "正在抽取概念与关系...",
+    "llm": "正在调用 AI 分析...",
+    "building": "正在构建图谱...",
+    "saving": "正在保存...",
+}
+
 
 @knowledge_bp.route('/extract/<int:book_id>', methods=['POST'])
 def extract_knowledge(book_id):
@@ -28,14 +45,34 @@ def extract_knowledge(book_id):
         if book_id in _running_tasks:
             return jsonify({"message": "知识抽取任务正在进行中，请稍候", "book_id": book_id})
         _running_tasks.add(book_id)
+        _task_progress[book_id] = {
+            "stage": "indexing", "current": 0, "total": 0,
+            "started_at": time.time(), "error": None,
+        }
+
+    def on_progress(stage, current=0, total=0):
+        with _running_tasks_lock:
+            p = _task_progress.get(book_id)
+            if p is not None:
+                p["stage"] = stage
+                p["current"] = current
+                p["total"] = total
 
     def extract_task():
         try:
             with open(text_path, 'r', encoding='utf-8') as f:
                 full_text = f.read()
 
+            # 分页文本用于给图谱节点标注页码（双击节点跳原文要用）
+            pages_path = os.path.join(CACHE_DIR, f'book_{book_id}_pages.json')
+            pages = None
+            if os.path.exists(pages_path):
+                with open(pages_path, 'r', encoding='utf-8') as f:
+                    pages = json.load(f)
+
             extractor = get_knowledge_extractor()
-            result = extractor.extract(full_text)
+            result = extractor.extract(full_text, pages=pages, on_progress=on_progress)
+            on_progress("saving")
 
             knowledge_path = os.path.join(CACHE_DIR, f'book_{book_id}_knowledge.json')
             with open(knowledge_path, 'w', encoding='utf-8') as f:
@@ -64,6 +101,10 @@ def extract_knowledge(book_id):
             db.commit()
         except Exception as e:
             print(f"[知识] 抽取失败: {e}")
+            with _running_tasks_lock:
+                p = _task_progress.get(book_id)
+                if p is not None:
+                    p["error"] = str(e)
         finally:
             with _running_tasks_lock:
                 _running_tasks.discard(book_id)
@@ -71,6 +112,46 @@ def extract_knowledge(book_id):
     thread = threading.Thread(target=extract_task, daemon=True)
     thread.start()
     return jsonify({"message": "知识抽取任务已启动", "book_id": book_id})
+
+
+@knowledge_bp.route('/progress/<int:book_id>', methods=['GET'])
+def get_extract_progress(book_id):
+    """
+    查询抽取进度，供前端轮询。
+
+    进程内内存态：后端重启过就查不到了，此时返回 running=false，
+    前端会退回"看图谱生成了没有"的老办法。
+    """
+    with _running_tasks_lock:
+        running = book_id in _running_tasks
+        p = dict(_task_progress.get(book_id) or {})
+
+    if not running:
+        return jsonify({"running": False})
+
+    elapsed = max(0, time.time() - p.get("started_at", time.time()))
+    total = p.get("total") or 0
+    current = p.get("current") or 0
+
+    # 只有 llm 阶段能算百分比：每块的耗时差不多，按已完成块数线性外推
+    percent = None
+    eta = None
+    if p.get("stage") == "llm" and total > 0:
+        percent = min(99, int(current / total * 100))   # 收尾还有几步，不显示 100
+        if current > 0:
+            eta = max(0, int(elapsed / current * (total - current)))
+
+    return jsonify({
+        "running": True,
+        "stage": p.get("stage", ""),
+        "message": STAGE_TEXT.get(p.get("stage", ""), "处理中..."),
+        "current": current,
+        "total": total,
+        "percent": percent,
+        "elapsed": int(elapsed),
+        "eta": eta,
+        "error": p.get("error"),
+    })
 
 
 @knowledge_bp.route('/graph/<int:book_id>', methods=['GET'])

@@ -18,9 +18,6 @@ def update_translator_config():
     data = request.json
     cfg = load_config()
 
-    if 'mode' in data:
-        cfg.mode = data['mode']
-
     if 'remote' in data:
         remote = data['remote']
         if 'provider' in remote:
@@ -41,3 +38,35 @@ def update_translator_config():
 @settings_bp.route('/translator/presets', methods=['GET'])
 def get_provider_presets():
     return jsonify(PROVIDER_PRESETS)
+
+
+@settings_bp.route('/translator/models', methods=['POST'])
+def list_models():
+    """
+    拉取厂商可用模型列表（OpenAI 兼容的 GET /models）
+    用 POST 是为了支持"填了但还没保存"的接口地址和 Key
+    """
+    data = request.json or {}
+    cfg = load_config().remote
+
+    api_base = (data.get('api_base') or cfg.api_base or '').strip()
+    api_key = (data.get('api_key') or cfg.api_key or '').strip()
+
+    if not api_base:
+        return jsonify({"error": "请先填写接口地址"}), 400
+    if not api_key:
+        return jsonify({"error": "请先填写 API Key"}), 400
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return jsonify({"error": "缺少 openai 依赖，请重新安装后端依赖"}), 500
+
+    try:
+        client = OpenAI(base_url=api_base, api_key=api_key, timeout=15)
+        models = sorted(m.id for m in client.models.list().data if getattr(m, 'id', None))
+        if not models:
+            return jsonify({"error": "该接口未返回任何模型"}), 502
+        return jsonify({"models": models})
+    except Exception as e:
+        return jsonify({"error": f"获取模型列表失败：{e}"}), 502

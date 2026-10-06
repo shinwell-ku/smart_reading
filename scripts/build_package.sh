@@ -54,25 +54,16 @@ else
   echo "  ⚠️  未找到 Python 标准库路径: $PYTHON_HOME/lib/python3.10"
 fi
 
-echo "[3/5] 复制 AI 模型..."
-if [ -d "$DATA_SRC/models" ] && [ "$(ls -A "$DATA_SRC/models" 2>/dev/null)" ]; then
-  rsync -a --exclude='bert4cls_small' "$DATA_SRC/models/" "$RES_DIR/data/models/"
-  echo "  模型已打包（排除 BERT）"
-else
-  mkdir -p "$RES_DIR/data/models"
-  echo "  无模型，跳过"
-fi
-
-echo "[4/6] 创建数据目录..."
+echo "[3/5] 创建数据目录（不打包任何模型）..."
 for d in db books cache exports; do mkdir -p "$RES_DIR/data/$d"; done
 
-echo "[5/6] 编译前端..."
+echo "[4/5] 编译前端..."
 cd "$DIR/frontend"
 npx vite build --logLevel error 2>/dev/null || echo "⚠️  前端编译失败"
 # 移除 crossorigin 属性以支持 Electron file:// 协议
 sed -i '' 's/ crossorigin//g' dist/index.html 2>/dev/null || true
 
-echo "[6/6] 构建 Electron 安装包..."
+echo "[5/5] 构建 Electron 安装包..."
 cd "$DIR/frontend"
 
 case "$1" in

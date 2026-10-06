@@ -2,6 +2,7 @@
 书籍路由 — 导入 / 列表 / 详情 / 删除 / 页面内容
 """
 import os
+import re
 import json
 from flask import Blueprint, jsonify, request, send_file
 from core.database import get_db
@@ -11,6 +12,53 @@ from models import Book
 from schemas import BookResponse, BookListResponse, BookImportResult, MessageResponse
 
 books_bp = Blueprint('books', __name__, url_prefix='/api/books')
+
+# 支持的文档格式 → 入库的 file_type
+# 前端按 file_type 决定渲染方式：pdf 走 react-pdf 画布，其余都是文本分页渲染
+EXT_TO_TYPE = {
+    '.pdf': 'pdf',
+    '.docx': 'docx',
+    '.txt': 'txt',
+    '.text': 'txt',
+    '.md': 'md',
+    '.markdown': 'md',
+    '.html': 'html',
+    '.htm': 'html',
+    '.xhtml': 'html',
+}
+SUPPORTED_EXTS_TEXT = 'PDF / Word / TXT / Markdown / HTML'
+
+
+def _detect_file_type(filename):
+    """按扩展名判断 file_type，不支持返回 None"""
+    return EXT_TO_TYPE.get(os.path.splitext(filename)[1].lower())
+
+
+def _base_name(path):
+    """
+    用于同名比对的文件名（含扩展名，统一小写）。
+
+    刻意不去剥「_1」这类重复导入后缀：原件始终保留原名，只有副本才带后缀，
+    所以拿原文件名做精确比对就能拦住重复导入。
+    反过来剥后缀会把 report_2024.pdf 认成 report，让不同年份的文件互相误判。
+    """
+    return os.path.basename(path).lower()
+
+
+def _find_duplicate(db, src_path):
+    """查找已存在的同名书籍（文件名精确比对，大小写不敏感）"""
+    target = _base_name(src_path)
+    for b in db.query(Book).all():
+        if _base_name(b.file_path) == target:
+            return b
+    return None
+
+
+def _next_sort_order(db):
+    """新书的排序值排到最后"""
+    from sqlalchemy import func
+    mx = db.query(func.max(Book.sort_order)).scalar()
+    return (mx or 0) + 1
 
 
 @books_bp.route('/import', methods=['POST'])
@@ -22,9 +70,9 @@ def import_book():
     if file.filename == '':
         return jsonify({"error": "文件名为空", "code": "EMPTY_NAME"}), 400
 
-    filename = file.filename.lower()
-    if not (filename.endswith('.pdf') or filename.endswith('.docx')):
-        return jsonify({"error": "仅支持 PDF 和 DOCX 格式", "code": "UNSUPPORTED_FORMAT"}), 400
+    file_type = _detect_file_type(file.filename)
+    if not file_type:
+        return jsonify({"error": f"仅支持 {SUPPORTED_EXTS_TEXT} 格式", "code": "UNSUPPORTED_FORMAT"}), 400
 
     book_path = os.path.join(BOOKS_DIR, file.filename)
     file.save(book_path)
@@ -38,7 +86,7 @@ def import_book():
             title=result.get('title', file.filename),
             author=result.get('author', '未知'),
             file_path=book_path,
-            file_type='pdf' if filename.endswith('.pdf') else 'docx',
+            file_type=file_type,
             total_pages=result.get('total_pages', 0),
             total_chars=result.get('total_chars', 0),
             chapter_tree=json.dumps(result.get('chapters', []), ensure_ascii=False),
@@ -97,8 +145,22 @@ def import_book_by_path():
         return jsonify({"error": "文件不存在", "code": "FILE_NOT_FOUND"}), 400
 
     filename = os.path.basename(src_path).lower()
-    if not (filename.endswith('.pdf') or filename.endswith('.docx')):
-        return jsonify({"error": "仅支持 PDF 和 DOCX 格式", "code": "UNSUPPORTED_FORMAT"}), 400
+    file_type = _detect_file_type(filename)
+    if not file_type:
+        return jsonify({"error": f"仅支持 {SUPPORTED_EXTS_TEXT} 格式", "code": "UNSUPPORTED_FORMAT"}), 400
+
+    # 同名文档：默认不重复导入，回一个可识别的信号让前端去问用户；
+    # 用户确认后带 allow_duplicate 再来一次。
+    db = get_db()
+    if not data.get('allow_duplicate'):
+        dup = _find_duplicate(db, src_path)
+        if dup:
+            return jsonify({
+                "error": f"书库中已有同名文档《{dup.title}》",
+                "code": "DUPLICATE_NAME",
+                "existing_id": dup.id,
+                "existing_title": dup.title,
+            }), 409
 
     # 复制到书籍目录
     dest_path = os.path.join(BOOKS_DIR, os.path.basename(src_path))
@@ -116,17 +178,17 @@ def import_book_by_path():
         parser = get_doc_parser()
         result = parser.parse(dest_path)
 
-        db = get_db()
         book = Book(
             title=result.get('title', filename),
             author=result.get('author', '未知'),
             file_path=dest_path,
-            file_type='pdf' if filename.endswith('.pdf') else 'docx',
+            file_type=file_type,
             total_pages=result.get('total_pages', 0),
             total_chars=result.get('total_chars', 0),
             chapter_tree=json.dumps(result.get('chapters', []), ensure_ascii=False),
             is_scan_pdf=1 if result.get('is_scan_pdf') else 0,
             status='ready',
+            sort_order=_next_sort_order(db),     # 新书排到末尾
         )
         db.add(book)
         db.commit()
@@ -168,6 +230,31 @@ def import_book_by_path():
         return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR"}), 500
 
 
+@books_bp.route('/order', methods=['PUT'])
+def update_book_order():
+    """保存书库手动排序。请求体: { "ids": [3, 1, 2] }"""
+    data = request.json or {}
+    ids = data.get('ids') or []
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"error": "缺少排序列表", "code": "NO_IDS"}), 400
+
+    db = get_db()
+    existing = {b.id: b for b in db.query(Book).all()}
+    order = 0
+    for bid in ids:
+        book = existing.get(bid)
+        if book is not None:
+            book.sort_order = order
+            order += 1
+    # 不在列表里的（理论上不会发生）保持原序，追加到后面
+    for b in existing.values():
+        if b.id not in set(ids):
+            b.sort_order = order
+            order += 1
+    db.commit()
+    return jsonify({"message": "排序已保存", "count": len(existing)})
+
+
 @books_bp.route('/<int:book_id>/file', methods=['GET'])
 def get_book_file(book_id):
     """获取原始 PDF 文件（供 PDF.js 加载）"""
@@ -181,7 +268,10 @@ def get_book_file(book_id):
 @books_bp.route('', methods=['GET'])
 def list_books():
     db = get_db()
-    books = db.query(Book).order_by(Book.last_read_at.desc()).all()
+    # 按用户手动排的顺序；没有 sort_order 的（理论上是迁移前的老数据）排在最后
+    books = db.query(Book).order_by(
+        Book.sort_order.is_(None), Book.sort_order.asc(), Book.id.asc()
+    ).all()
 
     items = []
     for b in books:
@@ -223,7 +313,7 @@ def delete_book(book_id):
 
     if os.path.exists(book.file_path):
         os.remove(book.file_path)
-    for ext in ['_text.txt', '_pages.json', '_translation.json', '_knowledge.json']:
+    for ext in ['_text.txt', '_pages.json', '_translation.json', '_knowledge.json', '_cover.png']:
         cache_file = os.path.join(CACHE_DIR, f'book_{book_id}{ext}')
         if os.path.exists(cache_file):
             os.remove(cache_file)

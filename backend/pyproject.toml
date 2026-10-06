@@ -1,7 +1,7 @@
 [project]
 name = "smart-reading"
 version = "1.0.0"
-description = "AI智慧阅读 - 纯本地离线 Python 后端服务"
+description = "AI智慧阅读 - Python 后端服务"
 requires-python = ">=3.9,<3.14"
 
 dependencies = [
@@ -11,13 +11,9 @@ dependencies = [
     # 文档解析
     "PyMuPDF>=1.21.0",
     "python-docx>=0.8.11",
-    # AI / NLP
-    "transformers<4.49",
-    "torch>=2.0.0",
-    "sentencepiece>=0.1.99",
     # 语言工具
     "langdetect>=1.0.9",
-    # 远程 LLM
+    # 远程 LLM（翻译 + 知识抽取）
     "openai>=2.44.0",
     # ORM + Schemas
     "sqlalchemy>=2.0",

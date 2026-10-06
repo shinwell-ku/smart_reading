@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   copyToBooks: (sourcePath) => ipcRenderer.invoke('file:copyToBooks', sourcePath),
   getBooksDir: () => ipcRenderer.invoke('app:getBooksDir'),
   getDataDir: () => ipcRenderer.invoke('app:getDataDir'),
+  showInFolder: (filePath) => ipcRenderer.invoke('app:showInFolder', filePath),
 
   // ─── 后端 API 代理 ───
   api: {

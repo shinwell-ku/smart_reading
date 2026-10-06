@@ -10,6 +10,7 @@ from core.database import get_db
 from core.config import CACHE_DIR
 from core.config import get_translator
 from models import TranslationRecord, Vocabulary, Book
+from services.translator import NOT_CONFIGURED_MSG
 from schemas import (
     TranslateRequest, TranslateResponse, FullTranslateRequest,
     TranslationStatusResponse, WordCreate, WordResponse, WordListResponse,
@@ -27,8 +28,10 @@ def translate_text():
     try:
         translator = get_translator()
         result = translator.translate(data.text, data.source_lang, data.target_lang)
+        error = result.get('error')
 
-        if data.book_id:
+        # 仅在真正翻译成功时记录，避免库里堆积空记录
+        if data.book_id and not error:
             db = get_db()
             db.add(TranslationRecord(
                 book_id=data.book_id,
@@ -43,6 +46,7 @@ def translate_text():
             translated_text=result.get('translated_text', ''),
             source_lang=result.get('detected_lang', data.source_lang),
             target_lang=data.target_lang,
+            error=error,
         )
         return jsonify(resp.model_dump())
 
@@ -58,13 +62,25 @@ def translate_full_book():
     if not os.path.exists(text_path):
         return jsonify({"error": "书籍文本不存在，请先解析"}), 400
 
+    translator = get_translator()
+    if not translator.is_configured():
+        return jsonify({"error": NOT_CONFIGURED_MSG}), 400
+
     with open(text_path, 'r', encoding='utf-8') as f:
         full_text = f.read()
 
+    # 扫描版 PDF 没有文本层，抽出来是空的；提前拦下，别起一个注定空跑的任务
+    if not full_text.strip():
+        return jsonify({"error": "该书没有可翻译的文本（可能是扫描版 PDF）"}), 400
+
     def translate_task():
         try:
-            translator = get_translator()
             result = translator.translate_long_text(full_text, data.target_lang)
+
+            # 出错、或没产出任何段落时不写缓存、不标记完成，避免留下空译文
+            if result.get('error') or not result.get('segments'):
+                print(f"[翻译] 全文翻译未产出内容: {result.get('error') or '空结果'}")
+                return
 
             trans_path = os.path.join(CACHE_DIR, f'book_{data.book_id}_translation.json')
             with open(trans_path, 'w', encoding='utf-8') as f:

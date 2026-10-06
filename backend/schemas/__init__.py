@@ -131,6 +131,7 @@ class TranslateResponse(BaseModel):
     translated_text: str
     source_lang: str
     target_lang: str
+    error: Optional[str] = None
 
 
 class FullTranslateRequest(BaseModel):
@@ -235,3 +236,14 @@ class MessageResponse(BaseModel):
 class BackupResponse(BaseModel):
     message: str
     path: Optional[str] = None
+    size: Optional[int] = None
+
+
+class RestoreResponse(BaseModel):
+    message: str
+    created_at: Optional[str] = None    # 备份包的创建时间
+    rewritten_paths: int = 0            # 被改回当前 BOOKS_DIR 的书籍路径数
+    book_count: int = 0
+    note_count: int = 0
+    bookmark_count: int = 0
+    word_count: int = 0

@@ -21,6 +21,11 @@ export default function App() {
   const panelRef = useRef(null)
   const dragRef = useRef(null)
 
+  // 护眼模式：启动时按上次设置恢复（设置页切换时会直接改 body class）
+  useEffect(() => {
+    document.body.classList.toggle('eye-care', localStorage.getItem('sr_eyeCare') === 'true')
+  }, [])
+
   useEffect(() => {
     const check = () => {
       api.checkHealth().then(r => setBackendOnline(r.status === 'ok')).catch(() => setBackendOnline(false))
@@ -30,10 +35,12 @@ export default function App() {
     const keydown = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'r') { e.preventDefault(); location.reload() } }
     const togglePanel = () => setPanelCollapsed(v => !v)
     const onBackendReady = () => { setTimeout(check, 500) } // 后端就绪后立即检测
+    const openSettings = () => setSettingsOpen(true)        // 侧边栏「去设置」入口
     document.addEventListener('keydown', keydown)
     window.addEventListener('toggle-panel', togglePanel)
     window.addEventListener('backend-ready', onBackendReady)
-    return () => { clearInterval(timer); document.removeEventListener('keydown', keydown); window.removeEventListener('toggle-panel', togglePanel); window.removeEventListener('backend-ready', onBackendReady) }
+    window.addEventListener('open-settings', openSettings)
+    return () => { clearInterval(timer); document.removeEventListener('keydown', keydown); window.removeEventListener('toggle-panel', togglePanel); window.removeEventListener('backend-ready', onBackendReady); window.removeEventListener('open-settings', openSettings) }
   }, [])
 
   const openBook = useCallback((book) => {
@@ -113,7 +120,7 @@ export default function App() {
                 }}
               />
             )}
-            <div className={'split-right' + (panelCollapsed ? ' collapsed' : '')} style={{ width: panelCollapsed ? 0 : panelWidth, position: 'relative', background: '#fff' }}>
+            <div className={'split-right' + (panelCollapsed ? ' collapsed' : '')} style={{ width: panelCollapsed ? 0 : panelWidth, position: 'relative' }}>
               {!panelCollapsed && (
                 <div className="reader-toolbar" style={{ justifyContent: 'space-between' }}>
                   <span className="reader-title">工具</span>
@@ -124,7 +131,7 @@ export default function App() {
             </div>
             {/* 折叠时：独立工具栏 + 下方标签 */}
             {panelCollapsed && (
-              <div style={{ width: 56, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #e4e7ed', background: '#fff' }}>
+              <div className="tab-rail" style={{ width: 56, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #e4e7ed' }}>
                 <div className="reader-toolbar" style={{ justifyContent: 'center', borderBottom: '1px solid #e4e7ed', flexShrink: 0 }}>
                   <Button type="text" onClick={() => setPanelCollapsed(false)} title="展开" style={{ color: '#909399' }}>«</Button>
                 </div>

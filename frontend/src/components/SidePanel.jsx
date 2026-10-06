@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
-import { Select, Button, Input, message, notification, Modal, Tooltip, Spin } from 'antd'
+import { Select, Button, Input, message, notification, Modal, Tooltip, Progress, Alert } from 'antd'
 import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 
 function cleanText(text) {
@@ -26,9 +26,19 @@ const TABS = [
   { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
 ]
 
+// 秒数 → 人类可读时长
+function fmtDuration(sec) {
+  if (sec == null) return ''
+  if (sec < 60) return `${sec} 秒`
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return s ? `${m} 分 ${s} 秒` : `${m} 分钟`
+}
+
 export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [sourceText, setSourceText] = useState('')
   const [resultText, setResultText] = useState('')
+  const [translateError, setTranslateError] = useState('')
   const [translating, setTranslating] = useState(false)
   const [sourceLang, setSourceLang] = useState('auto')
   const [targetLang, setTargetLang] = useState('zh')
@@ -44,6 +54,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [extracting, setExtracting] = useState(false)
+  const [progress, setProgress] = useState(null)
+  const pollRef = useRef(null)
   const [searching, setSearching] = useState(false)
   const [graphData, setGraphData] = useState(null)
   const [graphLayout, setGraphLayout] = useState('force')
@@ -75,6 +87,11 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     const h = () => { if (book) api.getBookmarks(book.id).then(r => setBookmarks(r.bookmarks || [])).catch(() => {}) }
     window.addEventListener('refresh-bookmarks', h)
     return () => window.removeEventListener('refresh-bookmarks', h)
+  }, [])
+
+  // 切换书籍/卸载时停掉进度轮询，避免继续打接口
+  useEffect(() => () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
   }, [book])
 
   // 切到知识图谱时自动加载
@@ -95,17 +112,18 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     if (!t) { message.info('请输入文本'); return }
     setTranslating(true)
     setResultText('⏳ 翻译中...')
+    setTranslateError('')
     try {
       const r = await api.translate({ text: t, source_lang: sourceLang, target_lang: targetLang })
-      if (r.error) { setResultText('翻译失败: ' + r.error); return }
-      setResultText(r.translated_text || '翻译失败')
+      if (r.error) { setTranslateError(r.error); setResultText(''); return }
+      setResultText(r.translated_text || '')
       // 自动保存生词
       if (r.translated_text && book) {
         api.saveWord({ book_id: book.id, word: t, translation: r.translated_text || '', page_num: page }).then(() => {
           setWordRefresh(n => n + 1)
         }).catch(() => {})
       }
-    } catch (e) { setResultText('翻译失败: ' + (e.message || '')) }
+    } catch (e) { setTranslateError(e.message || '网络错误'); setResultText('') }
     setTranslating(false)
   }
 
@@ -130,6 +148,120 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     await api.deleteNote(id)
     const r = await api.getNotes(book.id)
     setNotes(r.notes || [])
+  }
+
+  // 从"直接读图谱"兜底：后端重启会丢内存里的进度，此时靠图谱是否生成来判断
+  const finishIfGraphReady = async (bid) => {
+    try {
+      const data = await api.getKnowledgeGraph(bid)
+      if (data.nodes && data.nodes.length) {
+        setExtracting(false); setProgress(null)
+        setGraphExists(true); setGraphData(data)
+        notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
+        loadGraph(bid)
+        return true
+      }
+    } catch {}
+    return false
+  }
+
+  const startExtract = async () => {
+    if (!book || extracting) return
+    const bid = book.id
+
+    // 先估算规模并提示。LLM 模式下这是几分钟 + 真金白银，
+    // 不能让用户毫无预期地点一下然后干等。
+    let llm = false
+    try {
+      const cfg = await api.getTranslatorConfig()
+      // 注意：is_configured 是后端 pydantic 的 property，model_dump() 不会带出来，
+      // 这里按同样的规则自己判断
+      const r = cfg.remote || {}
+      llm = !!(r.api_base && r.api_key && r.model)
+    } catch {}
+
+    const chars = book.total_chars || 0
+    // 与后端分块一致：2000 字一块、200 字重叠 → 每块前进 1800 字
+    const chunks = Math.max(1, Math.ceil(chars / 1800))
+    const lo = Math.max(1, Math.round(chunks * 3 / 60))
+    const hi = Math.max(2, Math.round(chunks * 8 / 60))
+
+    const ok = await new Promise(resolve => {
+      Modal.confirm({
+        title: '开始生成知识图谱？',
+        width: 460,
+        content: llm ? (
+          <div style={{ fontSize: 12, lineHeight: 1.9 }}>
+            <div>
+              本书约 <b>{(chars / 10000).toFixed(1)} 万字</b>，将拆成约 <b>{chunks}</b> 段逐段调用 AI 分析。
+            </div>
+            <ul style={{ margin: '8px 0 0 18px', padding: 0, color: '#606266' }}>
+              <li>预计耗时 <b>{lo}–{hi} 分钟</b>，是逐段串行的，中途不会更快</li>
+              <li>会产生约 <b>{chunks} 次 API 调用</b>，计入你的 token 消耗</li>
+              <li>生成期间请勿关闭应用；下方会显示进度和预计剩余时间</li>
+            </ul>
+            <div style={{ marginTop: 8, color: '#909399' }}>
+              嫌慢或想省钱，可以在设置里换成更快的模型。
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, lineHeight: 1.9 }}>
+            <div>
+              本书约 <b>{(chars / 10000).toFixed(1)} 万字</b>，将使用<b>内置规则</b>抽取。
+            </div>
+            <ul style={{ margin: '8px 0 0 18px', padding: 0, color: '#606266' }}>
+              <li>速度快，通常几秒到几十秒完成</li>
+              <li>不调用 AI，<b>不消耗 token</b></li>
+            </ul>
+            <div style={{ marginTop: 8, color: '#fa8c16' }}>
+              未配置 AI 引擎，抽取的实体和关系质量会明显低于 AI 模式。
+              可在「设置 → AI 引擎」中配置后重新生成。
+            </div>
+          </div>
+        ),
+        okText: '开始生成', cancelText: '取消',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      })
+    })
+    if (!ok) return
+
+    setExtracting(true)
+    setProgress(null)
+    if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null }
+    setGraphExists(false); setGraphData(null); setSelectedEntity(null)
+
+    try { await api.extractKnowledge(bid) } catch {}
+
+    let missCount = 0
+    const timer = setInterval(async () => {
+      let p = null
+      try { p = await api.getKnowledgeProgress(bid) } catch {}
+
+      if (p && p.running) {
+        missCount = 0
+        setProgress(p)
+        return
+      }
+
+      // 后端已不在跑：可能刚好完成，也可能是重启丢了进度
+      clearInterval(timer)
+      if (p && p.error) {
+        setExtracting(false); setProgress(null)
+        message.error('知识抽取失败：' + p.error)
+        return
+      }
+      if (await finishIfGraphReady(bid)) return
+
+      // 没在跑、也没报错、图谱还没生成 —— 给几次重试的机会再下结论
+      if (++missCount >= 3) {
+        clearInterval(timer)
+        setExtracting(false); setProgress(null)
+        message.warning('抽取任务已中断（后端可能重启过），请重新生成')
+      }
+    }, 1000)
+
+    pollRef.current = timer
   }
 
   const renderGraph = (data, layout, labels, edges, repulsion) => {
@@ -181,7 +313,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 borderColor: '#fff', borderWidth: 2,
               },
               label: { show: showLabel !== undefined ? showLabel : n.level <= 2, fontSize: 11, fontWeight: n.level <= 1 ? 600 : 400 },
-              description: n.description, type: n.type,
+              // description/type/page_num 是自定义字段，双击跳原文要从这里读
+              description: n.description, type: n.type, page_num: n.page_num,
             })),
             edges: filteredEdges.map(e => ({
               source: e.source, target: e.target,
@@ -213,15 +346,11 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             if (node) setSelectedEntity(node)
           }
         })
-        // 双击 → 清除选中
+        // 双击节点：清除选中 + 跳到该实体在原文中的页码
         chart.on('dblclick', (params) => {
-          if (params.dataType === 'node') {
-            chart.dispatchAction({ type: 'unselectAll' })
-          }
-        })
-        // 节点双击 → 跳转到原文
-        chart.on('dblclick', (params) => {
-          if (params.dataType === 'node' && params.data.page_num > 0) {
+          if (params.dataType !== 'node') return
+          chart.dispatchAction({ type: 'unselectAll' })
+          if (params.data.page_num > 0) {
             window.dispatchEvent(new CustomEvent('go-to-page', { detail: params.data.page_num }))
           }
         })
@@ -280,6 +409,12 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>清除</Button>
             </div>
             <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="选中文本后自动填充或点当前页" />
+            {translateError && (
+              <Alert
+                type="error" showIcon message={translateError}
+                action={<Button size="small" type="link" onClick={() => window.dispatchEvent(new CustomEvent('open-settings'))}>去设置</Button>}
+              />
+            )}
             <Input.TextArea className="panel-textarea" value={resultText} readOnly placeholder="翻译结果" />
           </div>
         )}
@@ -290,7 +425,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>暂无生词，翻译时会自动记录</div>
               ) : (
                 words.map((w, i) => (
-                  <div key={w.id || i} style={{ padding: '8px 8px 4px', marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', background: '#fafafa', fontSize: 12, position: 'relative' }}>
+                  <div key={w.id || i} className="panel-card" style={{ padding: '8px 8px 4px', marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, position: 'relative' }}>
                     <div style={{ fontWeight: 600, color: '#303133', marginBottom: 2, paddingRight: 20 }}>{w.word}</div>
                     <div style={{ color: '#1677ff', marginBottom: 2 }}>{w.translation}</div>
                     <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -322,7 +457,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             </div>
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
               {notes.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无笔记</div> : notes.map(n => (
-                <div key={n.id} style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), background: '#f5f7fa', fontSize: 12 }}>
+                <div key={n.id} className="panel-card" style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), fontSize: 12 }}>
                   <div>{n.content}</div>
                   <div style={{ display: 'flex', fontSize: 11, color: '#909399', marginTop: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>第{n.page_num}页 {n.created_at || ''}</span>
@@ -400,7 +535,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                   {searchResults.map((r, i) => {
                     const page = r.page || Math.ceil((r.line || i) / 40) || 1
                     return (
-                      <div key={i} style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, cursor: 'pointer', background: '#fafafa' }}
+                      <div key={i} className="panel-card" style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, cursor: 'pointer' }}
                         onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: page }))}>
                         <div style={{ color: '#1677ff', marginBottom: 4 }}>第{page}页 行{r.line || i + 1}</div>
                         <div style={{ color: '#606266', lineHeight: 1.6, wordBreak: 'break-all' }} dangerouslySetInnerHTML={{
@@ -464,35 +599,34 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 </div>
               )}
               {extracting && (
-                <div style={{ textAlign: 'center', color: '#909399', padding: 30, fontSize: 12 }}>
-                  <Spin style={{ fontSize: 32, marginBottom: 6 }} />
-                  <div>知识抽取中</div>
+                <div style={{ padding: '24px 16px', fontSize: 12 }}>
+                  <Progress
+                    percent={progress?.percent ?? 0}
+                    status={progress?.percent == null ? 'active' : 'normal'}
+                    showInfo={progress?.percent != null}
+                    strokeColor="#1677ff"
+                  />
+                  <div style={{ textAlign: 'center', color: '#606266', marginTop: 8 }}>
+                    {progress?.message || '正在启动...'}
+                  </div>
+                  {progress?.total > 0 && (
+                    <div style={{ textAlign: 'center', color: '#909399', marginTop: 2 }}>
+                      第 {progress.current}/{progress.total} 块
+                      {progress.eta > 0 && ` · 约剩 ${fmtDuration(progress.eta)}`}
+                    </div>
+                  )}
+                  {progress?.eta == null && progress?.elapsed > 0 && (
+                    <div style={{ textAlign: 'center', color: '#c0c4cc', marginTop: 2 }}>
+                      已用 {fmtDuration(progress.elapsed)}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
             </div>
             <div style={{ marginTop: 'auto' }}>
               <Button size="small" type="primary" block disabled={extracting} loading={extracting}
-                onClick={() => {
-                  if (!book || extracting) return
-                  setExtracting(true)
-                  if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null }
-                  setGraphExists(false); setGraphData(null); setSelectedEntity(null)
-                  const bid = book.id
-                  api.extractKnowledge(bid).then(() => {
-                    const poll = setInterval(async () => {
-                      try {
-                        const data = await api.getKnowledgeGraph(bid)
-                        if (data.nodes && data.nodes.length) {
-                          clearInterval(poll); setExtracting(false)
-                          setGraphExists(true); setGraphData(data)
-                          notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
-                          loadGraph(bid)
-                        }
-                      } catch {}
-                    }, 10000)
-                  })
-                }}>
+                onClick={startExtract}>
                 {extracting ? '生成中...' : graphExists ? '重新生成' : '生成图谱'}
               </Button>
             </div>
@@ -507,7 +641,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 <span style={{ fontSize: 13 }}>{selectedEntity.type || 'concept'}</span>
               </div>
               {selectedEntity.description && (
-                <div style={{ marginBottom: 8, fontSize: 12, color: '#303133', lineHeight: 1.6, background: '#fafafa', padding: 8, borderRadius: 4 }}>
+                <div className="panel-card" style={{ marginBottom: 8, fontSize: 12, color: '#303133', lineHeight: 1.6, padding: 8, borderRadius: 4 }}>
                   {selectedEntity.description}
                 </div>
               )}
@@ -516,7 +650,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         </Modal>
       </div>
       {/* 右侧竖排 tab 标签 */}
-      <div style={{ width: 56, display: 'flex', flexDirection: 'column', background: '#fff', borderLeft: '1px solid #e4e7ed', flexShrink: 0, alignItems: 'center' }}>
+      <div className="tab-rail" style={{ width: 56, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #e4e7ed', flexShrink: 0, alignItems: 'center' }}>
         {TABS.map(tab => (
           <div key={tab.key}
             onClick={() => onTabChange(tab.key)}

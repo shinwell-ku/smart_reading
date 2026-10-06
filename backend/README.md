@@ -1,6 +1,6 @@
 # AI智慧阅读 - 后端服务
 
-纯本地离线 Python 后端，**Flask + SQLAlchemy + Pydantic** MVC 架构。
+Python 后端，**Flask + SQLAlchemy + Pydantic** MVC 架构。数据全部本地存储；翻译与知识抽取通过 OpenAI 兼容 API 调用远程 LLM。
 
 ## 快速开始
 
@@ -18,7 +18,7 @@ uv run python app.py       # → http://127.0.0.1:5001
 │  HTTP 处理、参数校验、调 Service、Schema 序列化 │
 ├──────────────────────────────────────────────┤
 │  Service     (services/)                     │
-│  纯业务逻辑：文档解析、翻译、知识抽取、OCR      │
+│  纯业务逻辑：文档解析、翻译、知识抽取            │
 ├──────────────────────────────────────────────┤
 │  Model       (models/ + schemas/)            │
 │  models/   — SQLAlchemy ORM（8 张表）        │
@@ -34,7 +34,7 @@ backend/
 ├── core/                     # 基础设施
 │   ├── config.py             # 路径 + 服务单例
 │   ├── database.py           # SQLAlchemy 引擎/会话
-│   └── translator_config.py  # 翻译模型配置（本地/远程，JSON 持久化）
+│   └── translator_config.py  # AI 引擎配置（JSON 持久化）
 ├── models/                   # ORM 模型
 │   └── __init__.py           # 8 张表
 ├── schemas/                  # 数据校验
@@ -46,9 +46,8 @@ backend/
 │   └── __init__.py           # 蓝图注册
 ├── services/                 # 业务逻辑
 │   ├── document_parser.py    # PDF（内嵌目录优先）/ DOCX 解析
-│   ├── translator.py         # 翻译（本地 NLLB-200 + 远程 LLM，热切换）
-│   ├── knowledge_extractor.py  # 知识抽取（规则 + 可选 BERT）
-│   └── ocr_service.py        # PaddleOCR
+│   ├── translator.py         # 翻译（远程 LLM，OpenAI 兼容 API）
+│   └── knowledge_extractor.py  # 知识抽取（LLM / 纯正则回退）
 └── pyproject.toml
 ```
 
@@ -65,34 +64,32 @@ backend/
 | `KnowledgeNode` | knowledge_nodes | book_id, node_id, label, node_type, level, parent_id |
 | `KnowledgeEdge` | knowledge_edges | book_id, source_id, target_id, relation_type |
 
-## AI 模型说明
+## AI 引擎
 
-| 模型 | 文件 | 用途 | 下载方式 |
-|------|------|------|---------|
-| **NLLB-200** | `data/models/nllb200_4bit/model.safetensors` | **离线翻译** — Meta 开源的 200 语种翻译模型。`translator.py` 优先加载，无模型时自动回退到规则翻译或远程 LLM。**注意**：需 safetensors 格式（已转换），`.bin` 文件与 torch 2.2.2 + transformers 4.48 不兼容。 | `uv run python ../scripts/download_models.py nllb200_4bit --mirror` |
-| **BERT** | `data/models/bert4cls_small/` | **知识抽取** — Google 的中文预训练模型，自动从书籍文本中提取核心概念、专业名词、定理案例，识别因果/包含/对比等逻辑关系。`knowledge_extractor.py` 优先加载，无模型时用纯正则规则。 | `uv run python ../scripts/download_models.py bert4cls_small --mirror` |
+**不自带任何本地模型**，没有 torch / transformers 依赖，安装包不含模型权重（2026-10 移除）。
+翻译与知识抽取都通过 OpenAI 兼容 API 调用远程 LLM。
 
-> ⚠️ 两个模型均为**可选依赖**。不下载翻译模型则使用内置规则翻译或远程 LLM；不下载知识模型则使用正则抽取。程序不会因缺少模型而崩溃。
-
-## 翻译引擎（新增）
-
-支持本地 NLLB-200 和远程 LLM 热切换，通过 `data/config/translator.json` 配置：
+通过 `data/config/translator.json` 配置：
 
 ```json
 {
-  "mode": "local",            // "local" | "remote"
   "remote": {
-    "provider": "openai",     // deepseek | siliconflow | moonshot | ...
-    "api_base": "https://api.openai.com/v1",
+    "provider": "deepseek",   // deepseek | siliconflow | moonshot | openai | ollama | ...
+    "api_base": "https://api.deepseek.com",
     "api_key": "",
-    "model": "gpt-4o-mini",
+    "model": "deepseek-chat",
     "max_tokens": 4096,
     "temperature": 0.3
   }
 }
 ```
 
-远程模式使用标准 `openai` SDK，兼容任何 OpenAI 格式 API（DeepSeek、硅基流动、智谱 GLM、Ollama 等）。
+使用标准 `openai` SDK，兼容任何 OpenAI 格式 API（DeepSeek、硅基流动、智谱 GLM、Ollama 等）。
+
+- 无 `mode` 字段；旧的 `mode: local/remote` 配置会被 pydantic 静默忽略，无需迁移
+- 是否可用由 `RemoteConfig.is_configured` 判定（api_base + api_key + model 三者非空）
+- `is_configured()` 默认会重新读盘。`TranslatorService` 是进程级单例，`_config` 只在 `translate()` 内刷新，路由直接查状态时必须传 `reload=True`（默认），否则读到启动时的旧配置
+- 未配置时翻译返回 `{"translated_text": "", "error": "..."}`；知识抽取自动回退纯正则规则
 
 ## API 路由
 
@@ -110,9 +107,12 @@ backend/
 | POST/GET | `/api/translate/words` | translation |
 | POST/GET/PUT | `/api/knowledge/extract\|graph\|export` | knowledge |
 | GET | `/api/search/:bookId` | search |
-| POST | `/api/backup\|/api/data/clear` | system |
-| GET/PUT | `/api/settings/translator` | settings（翻译配置） |
+| POST | `/api/backup` | system（导出备份到 `dest_path`） |
+| POST | `/api/restore` | system（从 `path` 恢复，整体覆盖） |
+| POST | `/api/data/clear` | system（清除书籍文件+数据+缓存，保留 config） |
+| GET/PUT | `/api/settings/translator` | settings（AI 引擎配置） |
 | GET | `/api/settings/translator/presets` | settings（厂商预设） |
+| POST | `/api/settings/translator/models` | settings（拉取厂商可用模型列表） |
 
 ## 数据存储
 
@@ -122,7 +122,7 @@ backend/
 | 书籍 | `data/books/` |
 | 缓存 | `data/cache/` |
 | 导出 | `data/exports/` |
-| 模型 | `data/models/` |
+| 配置 | `data/config/translator.json` |
 
 ## 端口
 

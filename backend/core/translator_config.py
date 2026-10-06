@@ -1,5 +1,5 @@
 """
-翻译模型配置 — 本地/远程模式切换
+翻译配置 — 远程 LLM（OpenAI 兼容 API）
 """
 import os
 import json
@@ -19,10 +19,14 @@ class RemoteConfig(BaseModel):
     max_tokens: int = 4096
     temperature: float = 0.3
 
+    @property
+    def is_configured(self) -> bool:
+        """接口地址 / API Key / 模型名三者齐全才算配置完成"""
+        return bool(self.api_base.strip() and self.api_key.strip() and self.model.strip())
+
 
 class TranslatorConfig(BaseModel):
-    """翻译模型总配置"""
-    mode: str = 'local'            # local | remote
+    """翻译总配置"""
     remote: RemoteConfig = RemoteConfig()
 
 

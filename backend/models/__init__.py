@@ -14,12 +14,13 @@ class Book(Base):
     title = Column(String(256), nullable=False, default='未命名')
     author = Column(String(128), default='未知')
     file_path = Column(String(512), nullable=False)
-    file_type = Column(String(16), nullable=False)  # pdf | docx
+    file_type = Column(String(16), nullable=False)  # pdf | docx | txt | md | html
     total_pages = Column(Integer, default=0)
     total_chars = Column(Integer, default=0)
     chapter_tree = Column(Text, default=None)          # JSON
     is_scan_pdf = Column(Integer, default=0)
     status = Column(String(32), default='ready')
+    sort_order = Column(Integer, default=None)          # 书库手动排序，越小越靠前
     created_at = Column(String(32), default=None)      # datetime('now','localtime')
     updated_at = Column(String(32), default=None)
     last_read_at = Column(String(32), default=None)

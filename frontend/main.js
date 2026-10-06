@@ -39,16 +39,25 @@ console.log(`[主进程] 数据目录: ${DATA_DIR}`);
 // Python 后端管理
 // ============================================================
 
+// venv 里可执行文件所在目录：Windows 是 Scripts，POSIX 是 bin
+function venvBinDir() {
+  return path.join(BACKEND_DIR, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin');
+}
+
+function venvPythonPath() {
+  return path.join(venvBinDir(), process.platform === 'win32' ? 'python.exe' : 'python3');
+}
+
 function fixPyvenvConfig() {
   // 修正 pyvenv.cfg 中的 home 路径，使其指向打包后的 venv 实际位置
   const pyvenvPath = path.join(BACKEND_DIR, '.venv', 'pyvenv.cfg');
   if (!fs.existsSync(pyvenvPath)) return;
   try {
-    const venvBinDir = path.join(BACKEND_DIR, '.venv', 'bin');
+    const binDir = venvBinDir();
     let content = fs.readFileSync(pyvenvPath, 'utf-8');
-    content = content.replace(/^home = .*/m, `home = ${venvBinDir}`);
+    content = content.replace(/^home = .*/m, `home = ${binDir}`);
     fs.writeFileSync(pyvenvPath, content, 'utf-8');
-    console.log(`[主进程] pyvenv.cfg home 已修正: ${venvBinDir}`);
+    console.log(`[主进程] pyvenv.cfg home 已修正: ${binDir}`);
   } catch (e) {
     console.error('[主进程] pyvenv.cfg 修正失败:', e);
   }
@@ -58,7 +67,7 @@ function getPythonCommand() {
   // 生产模式（已打包）：修正 pyvenv.cfg + 使用打包的 venv
   if (isPackaged) {
     fixPyvenvConfig();
-    const bundledPython = path.join(BACKEND_DIR, '.venv', process.platform === 'win32' ? 'Scripts\\python.exe' : 'bin/python3');
+    const bundledPython = venvPythonPath();
     if (fs.existsSync(bundledPython)) {
       return bundledPython;
     }
@@ -67,7 +76,8 @@ function getPythonCommand() {
   const candidates = ['python3', 'python', 'python3.11', 'python3.10'];
   for (const cmd of candidates) {
     try {
-      const result = require('child_process').execSync(`${cmd} --version`, { encoding: 'utf8' });
+      // 加超时：Windows 上 python3 可能是应用商店的占位程序，会挂住不返回
+      const result = require('child_process').execSync(`${cmd} --version`, { encoding: 'utf8', timeout: 5000 });
       if (result.toLowerCase().includes('python')) {
         return cmd;
       }
@@ -78,12 +88,37 @@ function getPythonCommand() {
   return 'python3'; // 默认
 }
 
+// 清理上次残留的后端进程，避免它占着 5001 端口让新进程绑不上。
+// POSIX 用 lsof，Windows 没有 lsof，改走 netstat 找 PID + taskkill。
+function killStaleBackend() {
+  const cp = require('child_process');
+  if (process.platform === 'win32') {
+    try {
+      const out = cp.execSync('netstat -ano -p TCP', { encoding: 'utf8', timeout: 5000 });
+      const pids = new Set();
+      for (const line of out.split('\n')) {
+        const cols = line.trim().split(/\s+/);
+        // 形如: TCP  127.0.0.1:5001  0.0.0.0:0  LISTENING  12345
+        if (cols.length >= 5 && cols[1] && cols[1].endsWith(':5001') && /LISTENING/i.test(line)) {
+          const pid = cols[cols.length - 1];
+          if (/^\d+$/.test(pid) && pid !== '0') pids.add(pid);
+        }
+      }
+      for (const pid of pids) {
+        try { cp.execSync(`taskkill /F /PID ${pid}`, { timeout: 5000, stdio: 'ignore' }); } catch (e) { /* 已退出 */ }
+      }
+      if (pids.size) console.log(`[主进程] 已清理占用 5001 的残留进程: ${[...pids].join(', ')}`);
+    } catch (e) { /* 没有残留进程是正常情况 */ }
+  } else {
+    try {
+      cp.execSync('lsof -ti:5001 | xargs kill -9 2>/dev/null; sleep 1', { timeout: 3000 });
+    } catch (e) { /* 同上 */ }
+  }
+}
+
 function startPythonBackend() {
   return new Promise((resolve, reject) => {
-    // 先清理上次残留的 Python 后端进程
-    try {
-      require('child_process').execSync('lsof -ti:5001 | xargs kill -9 2>/dev/null; sleep 1', { timeout: 3000 });
-    } catch (e) { /* ok */ }
+    killStaleBackend();
 
     const pythonCmd = getPythonCommand();
     const appPy = path.join(BACKEND_DIR, 'app.py');
@@ -95,10 +130,7 @@ function startPythonBackend() {
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',
-        SMART_READING_HOME: ROOT_DIR,
-        // 禁止联网下载模型
-        HF_HUB_OFFLINE: '1',
-        TRANSFORMERS_OFFLINE: '1'
+        SMART_READING_HOME: ROOT_DIR
       },
       stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -221,11 +253,13 @@ function createMainWindow() {
 // 文件对话框 - 选择导入书籍
 ipcMain.handle('dialog:openFile', async (event, options) => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: '导入电子书',
+    title: '导入文档',
     filters: [
-      { name: '电子书文件', extensions: ['pdf', 'docx'] },
+      { name: '支持的文档', extensions: ['pdf', 'docx', 'txt', 'md', 'markdown', 'html', 'htm'] },
       { name: 'PDF 文件', extensions: ['pdf'] },
       { name: 'Word 文件', extensions: ['docx'] },
+      { name: '文本 / Markdown', extensions: ['txt', 'md', 'markdown'] },
+      { name: '网页文件', extensions: ['html', 'htm'] },
       { name: '所有文件', extensions: ['*'] }
     ],
     properties: ['openFile', 'multiSelections'],
@@ -284,6 +318,16 @@ ipcMain.handle('app:getDataDir', () => {
 // 获取书籍目录
 ipcMain.handle('app:getBooksDir', () => {
   return BOOKS_DIR;
+});
+
+// 在文件管理器里定位文件（导出备份后告诉用户文件在哪）
+ipcMain.handle('app:showInFolder', (event, filePath) => {
+  try {
+    shell.showItemInFolder(filePath);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 // 复制文件到书籍目录

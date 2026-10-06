@@ -14,10 +14,9 @@ DATA_DIR = os.path.join(ROOT_DIR, 'data')
 BOOKS_DIR = os.path.join(DATA_DIR, 'books')
 EXPORTS_DIR = os.path.join(DATA_DIR, 'exports')
 CACHE_DIR = os.path.join(DATA_DIR, 'cache')
-MODELS_DIR = os.path.join(DATA_DIR, 'models')
 DB_DIR = os.path.join(DATA_DIR, 'db')
 
-for d in [DATA_DIR, BOOKS_DIR, EXPORTS_DIR, CACHE_DIR, MODELS_DIR, DB_DIR]:
+for d in [DATA_DIR, BOOKS_DIR, EXPORTS_DIR, CACHE_DIR, DB_DIR]:
     os.makedirs(d, exist_ok=True)
 
 # ============================================================
@@ -45,7 +44,7 @@ def get_translator():
     from services.translator import TranslatorService
     from core.translator_config import load_config
     cfg = load_config()
-    return _get_service('translator', lambda: TranslatorService(MODELS_DIR, config=cfg))
+    return _get_service('translator', lambda: TranslatorService(config=cfg))
 
 
 def get_knowledge_extractor():

@@ -4,6 +4,7 @@
 import os
 import re
 import json
+import bisect
 import hashlib
 
 # LLM 抽取指令模板
@@ -41,29 +42,78 @@ class KnowledgeExtractor:
         except Exception:
             pass
 
-    def extract(self, full_text):
-        """从全文提取知识结构"""
+    # ---------- 字符偏移 → 页码 ----------
+
+    @staticmethod
+    def _build_page_index(pages):
+        """
+        由每页文本构造 [(起始偏移, 页码), ...]，供二分查找。
+
+        依据：DocumentParser 里 `full_text = '\\n'.join(pages)`，
+        所以第 i 页（从 0 数）的文本在全文中的起始偏移是
+        前面各页长度之和 + i（每两页之间有一个 '\\n' 分隔符）。
+        没有这个对齐关系就没法把 chunk 偏移映射回页码。
+        """
+        index = []
+        offset = 0
+        for i, page_text in enumerate(pages or []):
+            index.append((offset, i + 1))     # 页码对外从 1 开始
+            offset += len(page_text or '') + 1  # +1 是 join 的 '\n'
+        return index
+
+    @staticmethod
+    def _page_at(offset, page_index):
+        """查某个字符偏移落在第几页；索引为空（如 DOCX 无分页）时返回 0"""
+        if not page_index:
+            return 0
+        starts = [p[0] for p in page_index]
+        pos = bisect.bisect_right(starts, offset) - 1
+        return page_index[max(pos, 0)][1]
+
+    def extract(self, full_text, pages=None, on_progress=None):
+        """
+        从全文提取知识结构。
+
+        pages       每页文本，用于给节点标注页码
+        on_progress 进度回调 on_progress(stage, current, total)
+                    stage 取值见 routes/knowledge.py 的说明
+        """
         self._reload_config()
         if not full_text or not full_text.strip():
             return {"nodes": [], "edges": [], "outline": []}
 
-        # 远程 LLM 模式
-        if self._config and self._config.mode == 'remote':
-            return self._extract_with_llm(full_text)
+        def report(stage, current=0, total=0):
+            if on_progress:
+                try:
+                    on_progress(stage, current, total)
+                except Exception:
+                    pass          # 进度上报失败不该影响抽取本身
+
+        report("indexing")
+        page_index = self._build_page_index(pages)
+
+        # 已配置 AI 引擎 → 走 LLM；否则回退正则规则（离线可用）
+        if self._config and self._config.remote.is_configured:
+            return self._extract_with_llm(full_text, page_index, report)
 
         # 规则模式
+        report("chunking")
         chunks = self._split_into_chunks(full_text)
+        report("outline")
         outline = self._extract_outline(full_text)
+        report("rules", 0, len(chunks))
         concepts = self._extract_concepts(chunks)
+        report("rules", len(chunks), len(chunks))
         relations = self._identify_relations(chunks, concepts)
-        nodes = self._build_nodes(outline, concepts, full_text)
+        report("building")
+        nodes = self._build_nodes(outline, concepts, full_text, page_index)
         edges = self._build_edges(nodes, relations)
         return {"nodes": nodes, "edges": edges, "outline": outline}
 
     def _call_llm(self, text):
         """调用远程 LLM"""
         cfg = self._config
-        if not cfg or cfg.mode != 'remote' or not cfg.remote.api_base or not cfg.remote.api_key:
+        if not cfg or not cfg.remote.is_configured:
             return None
         try:
             from openai import OpenAI
@@ -84,16 +134,25 @@ class KnowledgeExtractor:
             print(f"[知识抽取] LLM 调用失败: {e}")
             return None
 
-    def _extract_with_llm(self, full_text):
+    def _extract_with_llm(self, full_text, page_index=None, report=None):
         """LLM 分块抽取 + 合并"""
+        if report is None:
+            report = lambda *a, **k: None
+
+        report("chunking")
         chunks = self._split_into_chunks(full_text, chunk_size=2000, overlap=200)
+        total = len(chunks)
+        # 分块数要等切完才知道，所以第一次上报才带得出总数
+        report("llm", 0, total)
+
         all_entities = {}
         all_relations = []
         seen_rels = set()
 
         for i, chunk in enumerate(chunks):
-            print(f"[知识抽取] LLM 处理第 {i+1}/{len(chunks)} 块...")
+            print(f"[知识抽取] LLM 处理第 {i+1}/{total} 块...")
             result = self._call_llm(chunk["text"])
+            report("llm", i + 1, total)
             if not result:
                 continue
 
@@ -104,6 +163,9 @@ class KnowledgeExtractor:
                         "name": name,
                         "type": e.get("type", "concept"),
                         "description": e.get("description", "")[:100],
+                        "page_num": self._page_at(
+                            chunk["start_pos"] + max(chunk["text"].find(name), 0),
+                            page_index),
                     }
 
             for r in result.get("relations", []):
@@ -121,11 +183,13 @@ class KnowledgeExtractor:
                         })
 
         print(f"[知识抽取] LLM 完成: {len(all_entities)} 实体, {len(all_relations)} 关系")
+        report("outline")
 
         # 用规则模式提取大纲（章节结构）
         outline = self._extract_outline(full_text)
 
         # 构建图谱
+        report("building")
         nodes = self._build_nodes_from_llm(all_entities, outline, full_text)
         edges = self._build_edges_from_llm(nodes, all_relations)
 
@@ -167,7 +231,8 @@ class KnowledgeExtractor:
                 "id": gen_id(), "label": name,
                 "type": ent.get("type", "concept"), "level": 2,
                 "parent_id": root_id, "chapter": "",
-                "description": ent.get("description", "")[:80], "page_num": 0
+                "description": ent.get("description", "")[:80],
+                "page_num": ent.get("page_num", 0),
             })
 
         return nodes
@@ -203,7 +268,15 @@ class KnowledgeExtractor:
         return edges
 
     def _split_into_chunks(self, text, chunk_size=1000, overlap=100):
-        """将长文本分割为重叠块"""
+        """
+        将长文本分割为带重叠的块。
+
+        重叠是实打实的：相邻块之间共享 overlap 个字符。
+        没有重叠的话，跨块的关系会断——前一块定义的实体、后一块引用它，
+        模型看不到前文，关联就丢了。overlap 同时兼作找句子边界的前瞻窗口。
+
+        代价：块数约增加 chunk_size/(chunk_size-overlap)，即 LLM 调用次数略增。
+        """
         chunks = []
         start = 0
         text_len = len(text)
@@ -211,9 +284,8 @@ class KnowledgeExtractor:
         while start < text_len:
             end = min(start + chunk_size, text_len)
 
-            # 尽量在句子边界处切割
+            # 尽量在句子边界处切割（在 [end, end+overlap) 区间内找标点）
             if end < text_len:
-                # 找最近的句子结束位置
                 search_end = min(end + overlap, text_len)
                 last_period = -1
                 for punct in ['。', '！', '？', '\n', '.', '!', '?']:
@@ -232,7 +304,10 @@ class KnowledgeExtractor:
                     "end_pos": end
                 })
 
-            start = end
+            # 下一块回退 overlap 个字符形成重叠；保证 start 一定前进，
+            # 否则 end-overlap <= start 时会原地死循环
+            next_start = end - overlap
+            start = next_start if next_start > start else end
 
         return chunks
 
@@ -307,9 +382,10 @@ class KnowledgeExtractor:
 
             # 使用正则模式抽取
             for pattern in concept_patterns:
-                matches = re.findall(pattern, text)
-                for match in matches:
-                    clean = match.strip().rstrip('的')
+                # 用 finditer 而非 findall，才能拿到匹配在块内的位置，
+                # 进而算出它在全文中的准确偏移 → 准确页码
+                for m in re.finditer(pattern, text):
+                    clean = (m.group(1) if m.groups() else m.group(0)).strip().rstrip('的')
                     if len(clean) >= 3 and clean not in seen:
                         # 去重
                         key = hashlib.md5(clean.encode()).hexdigest()
@@ -319,7 +395,9 @@ class KnowledgeExtractor:
                                 "label": clean,
                                 "type": "concept",
                                 "source_text": text[:100],
-                                "chunk_pos": chunk_data["start_pos"]
+                                "chunk_pos": chunk_data["start_pos"],
+                                # 概念自身在全文中的偏移（组的位置，不是整个匹配的位置）
+                                "abs_pos": chunk_data["start_pos"] + m.start(1 if m.groups() else 0),
                             })
 
         # 简单去重合并
@@ -365,7 +443,7 @@ class KnowledgeExtractor:
 
         return relations
 
-    def _build_nodes(self, outline, concepts, full_text):
+    def _build_nodes(self, outline, concepts, full_text, page_index=None):
         """构建图谱节点"""
         nodes = []
         node_id_counter = [0]
@@ -425,7 +503,9 @@ class KnowledgeExtractor:
                 "parent_id": parent,
                 "chapter": "",
                 "description": f"来源: {concept.get('source_text', '')[:80]}",
-                "page_num": 0
+                # 优先用概念自身的偏移（准），退化到块起始位置（跨页时可能偏一页）
+                "page_num": self._page_at(
+                    concept.get("abs_pos", concept.get("chunk_pos", 0)), page_index),
             })
 
         return nodes
