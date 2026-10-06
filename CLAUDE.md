@@ -70,9 +70,12 @@ npm run build:win                # ⚠ 见下方「Windows 打包移植」，当
 
 ### Start Everything
 ```bash
-# 两个终端分别跑：后端 uv run python app.py，前端 npm start
-# 打包后运行时 Electron 主进程会自动拉起 Python 后端，无需手动启动
+cd frontend && npm start        # 编译前端 + 启动 Electron，会自动拉起 Python 后端
 ```
+主进程 `app.whenReady()` 里就会 `startPythonBackend()`，**开发版和打包版都一样**，不需要另开终端手动起后端。
+（手动起也可以，但 `startPythonBackend()` 开头的 `killStaleBackend()` 会先把它杀掉再自己拉一个 —— 多此一举，别这么干。）
+
+Python 解释器的选择见 `getPythonCommand()`：**两种模式都优先用项目自带的 venv**（开发版是仓库里的 `.venv`，打包版是 app 内的），只有当 `.venv` 不存在时才退回系统 Python。`fixPyvenvConfig()` 只在打包版执行 —— 开发版的 `pyvenv.cfg` 本来就是对的，改写会弄坏它。
 
 ## Architecture
 

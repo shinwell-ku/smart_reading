@@ -69,18 +69,25 @@
 - **Node.js**: 18+
 - **包管理**: [uv](https://docs.astral.sh/uv/)（Python），npm（Node.js）
 
-### 手动启动
+### 启动开发版
 
 ```bash
-# 1. 启动 Python 后端（使用 uv）
-cd backend
-uv sync                        # 安装依赖
-uv run python app.py          # 启动后端服务 (127.0.0.1:5001)
+# 1. 装依赖（各一次）
+cd backend && uv sync          # Python 依赖
+cd ../frontend && npm install  # 前端依赖
 
-# 2. 另开一个终端启动前端
+# 2. 启动：编译前端 + 打开 Electron，并自动拉起 Python 后端
 cd frontend
-npm install
 npm start
+```
+
+**不需要另开终端起后端** —— Electron 主进程启动时会自己拉起 `backend/.venv` 里的 Python。
+
+只想单独调后端接口（比如用 curl 试 API）时：
+
+```bash
+cd backend
+uv run python app.py           # → http://127.0.0.1:5001
 ```
 
 ### 配置 AI 引擎

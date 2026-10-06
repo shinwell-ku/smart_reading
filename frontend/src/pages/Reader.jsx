@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import { api } from '../api'
 import { Button, Slider, message, Tooltip } from 'antd'
 import { BarsOutlined, StarOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
@@ -10,19 +10,21 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 export default function Reader({ book, onPageChange, onBack }) {
   const [numPages, setNumPages] = useState(0)
   const [page, setPage] = useState(1)       // 当前可见页
-  const [scale, setScale] = useState(1)
+  const [scale, setScale] = useState(1)          // 显示缩放（CSS transform 用）
+  const [renderScale, setRenderScale] = useState(1)  // canvas 光栅化用的缩放，恒定不变则不重绘
   const [textFontSize, setTextFontSize] = useState(15)
   const [loading, setLoading] = useState(true)
   const [pdfData, setPdfData] = useState(null)
   const [docxContent, setDocxContent] = useState('')
   const [docxAllText, setDocxAllText] = useState('')  // DOCX 全文
   const [docxPages, setDocxPages] = useState([])       // DOCX 分页数组
-  const [pageOffsets, setPageOffsets] = useState([])   // PDF 各页偏移量
+  const [pageBaseHeights, setPageBaseHeights] = useState([])  // 各页在 scale=1 下的高度
+  // pageOffsets / totalHeight 由 pageBaseHeights + scale 经 useMemo 派生，见下方
   const scrollRef = useRef(null)
+  const restoredRef = useRef(false)   // 是否已恢复过阅读位置（只恢复一次）
   const pageRef = useRef(page)
   pageRef.current = page
   const pdfRef = useRef(null)
-  const [containerWidth, setContainerWidth] = useState(null)
 
   // pdf 走 react-pdf 画布；其余（docx / txt / md / html）都是文本分页渲染
   const isText = !!book?.file_type && book.file_type !== 'pdf'
@@ -44,7 +46,9 @@ export default function Reader({ book, onPageChange, onBack }) {
     setDocxAllText('')
     setPage(1)
     setNumPages(0)
-    setPageOffsets([])
+    setPageBaseHeights([])        // 换书时清掉上一本的页高基准
+    setRenderScale(1)
+    restoredRef.current = false
 
     if (isText) {
       ;(async () => {
@@ -115,27 +119,40 @@ export default function Reader({ book, onPageChange, onBack }) {
     setDocxAllText(parts.join('\n'))
   }
 
-  // 监听容器宽度变化（面板拖拽时重算页高 + 缩放）
+  // 监听容器宽度变化（开关目录、拖拽面板时自适应缩放）
+  //
+  // 必须防抖 + 设变化阈值：开/关目录时布局要经过几帧才稳定，
+  // 不防抖的话每一步都会 setScale，而 scale 一变 react-pdf 就会
+  // 丢弃画布重新渲染（pageKey 里含 scale），于是连闪好几下。
+  // 阈值则避免宽度只差 1~2px 就触发一次全量重渲染。
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
+
   useEffect(() => {
-    if (!scrollRef.current) return
+    const el = scrollRef.current
+    if (!el) return
+    let timer = null
+
     const obs = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        const w = Math.round(entry.contentRect.width)
-        if (w > 100) {
-          setContainerWidth(w)
-          // 自适应缩放
-          if (pdfRef.current) {
-            pdfRef.current.getPage(1).then(pageObj => {
-              const vp = pageObj.getViewport({ scale: 1 })
-              const fit = Math.max(0.5, Math.min(2, parseFloat((w / vp.width).toFixed(2))))
-              setScale(fit)
-            }).catch(() => {})
-          }
-        }
-      }
+      const entry = entries[entries.length - 1]
+      const w = Math.round(entry.contentRect.width)
+      if (w <= 100) return
+      if (!pdfRef.current) return
+
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        pdfRef.current.getPage(1).then(pageObj => {
+          const vp = pageObj.getViewport({ scale: 1 })
+          const fit = Math.max(0.5, Math.min(2, parseFloat((w / vp.width).toFixed(2))))
+          // 差异太小就别动，不值得付一次画布重建的代价
+          if (Math.abs(fit - scaleRef.current) < 0.02) return
+          setScale(fit)
+        }).catch(() => {})
+      }, 250)
     })
-    obs.observe(scrollRef.current)
-    return () => obs.disconnect()
+
+    obs.observe(el)
+    return () => { if (timer) clearTimeout(timer); obs.disconnect() }
   }, [])
 
   // PDF 加载完成
@@ -146,58 +163,104 @@ export default function Reader({ book, onPageChange, onBack }) {
     if (scrollRef.current) {
       const w = Math.round(scrollRef.current.clientWidth - 32)
       if (w > 100) {
-        setContainerWidth(w)
         // 自动计算缩放比例，让页面适配宽度
         try {
           const pageObj = await pdf.getPage(1)
           const vp = pageObj.getViewport({ scale: 1 })
           const fit = Math.max(0.5, Math.min(2, parseFloat((w / vp.width).toFixed(2))))
           setScale(fit)
+          setRenderScale(fit)   // 首屏按当前尺寸光栅化
         } catch {}
       }
     }
   }, [])
 
-  // 测量各页高度（基于 scale，页面渲染的真实高度）
+  // 测量各页在 scale=1 下的高度。只随文档变化测一次。
+  //
+  // 关键：getViewport({scale}).height 与 scale 严格成正比，
+  // 所以任何缩放下的真实高度 = 基准高度 × scale，纯乘法即可。
+  // 原实现把这一步写在依赖 scale 的 effect 里，每次缩放都要把
+  // 全部页面（实测 758 页）重新 getPage 一遍再 setState，
+  // 于是开/关目录时反复触发整页重排 —— 就是闪一下抖几下的来源。
   useEffect(() => {
     if (!pdfRef.current || !numPages) return
     let cancelled = false
     ;(async () => {
-      const heights = []
+      const hs = []
       for (let i = 1; i <= numPages; i++) {
         if (cancelled) return
         try {
           const p = await pdfRef.current.getPage(i)
-          const vp = p.getViewport({ scale })
-          heights.push(Math.round(vp.height))
-        } catch { heights.push(600) }
+          hs.push(p.getViewport({ scale: 1 }).height)
+        } catch { hs.push(600) }
       }
-      if (cancelled) return
-      let accum = 0
-      const offsets = heights.map(h => {
-        const o = accum
-        accum += h + 12
-        return o
-      })
-      setPageOffsets(offsets)
+      if (!cancelled) setPageBaseHeights(hs)
     })()
     return () => { cancelled = true }
-  }, [numPages, scale])
+  }, [numPages])
 
-  // 恢复到上次阅读位置
+  // 偏移量由基准高度和当前缩放直接算出，不再碰 pdf 对象
+  const PAGE_GAP = 12
+  const { pageOffsets, totalHeight } = useMemo(() => {
+    if (!pageBaseHeights.length) return { pageOffsets: [], totalHeight: 0 }
+    const offs = []
+    let acc = 0
+    for (const h of pageBaseHeights) {
+      offs.push(acc)
+      acc += Math.round(h * scale) + PAGE_GAP
+    }
+    return { pageOffsets: offs, totalHeight: acc }
+  }, [pageBaseHeights, scale])
+
+  // 放大到超过已光栅化的分辨率时，提高渲染分辨率重画一次。
+  //
+  // 画布只按 renderScale 光栅化，显示再大也只是 CSS 拉伸，会糊。
+  // 所以显示缩放超过渲染分辨率时要补一次真正的重绘。
+  // 这只在用户主动放大时发生；开关目录那种「显示变小」的场景
+  // 不会触发，所以不会闪 —— 这正是拆开两个 scale 的目的。
   useEffect(() => {
+    if (scale > renderScale + 0.01) setRenderScale(scale)
+  }, [scale, renderScale])
+
+  // 恢复到上次阅读位置：换书后只做一次
+  useEffect(() => {
+    if (restoredRef.current) return
     if (!scrollRef.current || pageRef.current <= 1) return
     if (isText) {
-      // DOCX：滚动到目标页
       const pages = scrollRef.current.querySelectorAll('.docx-page')
       const target = pages[pageRef.current - 1]
-      if (target) target.scrollIntoView({ block: 'start' })
+      if (!target) return
+      restoredRef.current = true
+      target.scrollIntoView({ block: 'start' })
     } else if (pageOffsets.length) {
-      // PDF：使用 pageOffsets
       const target = pageOffsets[pageRef.current - 1]
-      if (target !== undefined) scrollRef.current.scrollTop = target
+      if (target === undefined) return
+      restoredRef.current = true
+      scrollRef.current.scrollTop = target
     }
-  }, [pageOffsets, isText])
+  }, [pageOffsets, isText, book])
+
+  // 缩放变化后把滚动位置重新锚定到当前页。
+  //
+  // 缩放一变，每页高度跟着变、总高也变，而 scrollTop 还是旧的像素值，
+  // 对应的位置就漂到别的页去了（开/关目录时会跳到很后面甚至最后一页）。
+  // 所以这里必须补一次锚定。
+  //
+  // 但触发条件只能挂在 scale 上，不能像原来那样挂在 pageOffsets 上 ——
+  // 那样每次偏移量更新都会强制回滚，和滚动过程互相打架，就成了抖动。
+  const prevScaleRef = useRef(scale)
+  // 必须用 useLayoutEffect：它在 DOM 提交后、浏览器绘制前同步执行。
+  // 用 useEffect 的话顺序是「提交新偏移量 → 绘制（此时 scrollTop 还是旧值，
+  // 对应错误的页，就是你看到的那一闪）→ 才纠正 scrollTop → 再绘制」，
+  // 中间那帧错位会被真真切切画出来。用 layout effect 则纠正发生在绘制之前，
+  // 错位帧根本不会上屏。
+  useLayoutEffect(() => {
+    if (prevScaleRef.current === scale) return
+    prevScaleRef.current = scale
+    if (isText || !scrollRef.current || !pageOffsets.length) return
+    const target = pageOffsets[pageRef.current - 1]
+    if (target !== undefined) scrollRef.current.scrollTop = target
+  }, [scale, pageOffsets, isText])
 
   // 从滚动位置找当前页
   const findPageFromScroll = useCallback((scrollTop) => {
@@ -326,7 +389,15 @@ export default function Reader({ book, onPageChange, onBack }) {
   // ─── 计算可见的 PDF 页面列表（scrollPos 变化时重算）───
   const visiblePages = (() => {
     if (!pageOffsets.length || !scrollRef.current) return []
-    const st = scrollRef.current.scrollTop
+    // 缩放刚变、scrollTop 还没被上面那个 useLayoutEffect 校正的那一帧，
+    // 桌面上的 scrollTop 是旧的，而 pageOffsets 已经是新的 —— 两者错配，
+    // 算出来的可见页是错的。那些页挂载后 canvas 还没画好就被卸载，
+    // 再接上真正该显示的那批页，中间的空档就是"闪一下"。
+    // 所以这一帧改用「校正后的位置」来算。
+    const scaleJustChanged = scale !== prevScaleRef.current
+    const st = scaleJustChanged
+      ? (pageOffsets[pageRef.current - 1] ?? scrollPos)
+      : scrollRef.current.scrollTop
     const vh = scrollRef.current.clientHeight
     const start = Math.max(1, findPageFromScroll(Math.max(0, st - 600)) - 1)
     const end = Math.min(numPages, findPageFromScroll(st + vh + 600) + 1)
@@ -336,7 +407,6 @@ export default function Reader({ book, onPageChange, onBack }) {
   })(scrollPos)  // eslint-disable-line no-unused-expressions
 
   // 总滚动高度 = 末页起始 + 末页估算高度
-  const totalHeight = pageOffsets.length > 0 ? pageOffsets[pageOffsets.length - 1] + scrollRef.current?.clientHeight * 1.5 || 2000 : 0
 
   const renderChapters = (items, indent, curPage, onGo) => {
     return items.map((ch, i) => (
@@ -409,7 +479,7 @@ export default function Reader({ book, onPageChange, onBack }) {
         )}
         {/* 滚动容器 */}
         <div className="pdf-container" ref={scrollRef} onScroll={handleScroll} onMouseUp={handleSelect}>
-          {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center' }}>📖 加载中...</div>}
+          {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center', whiteSpace: 'nowrap' }}>📖 加载中...</div>}
           {!loading && isText && (
             <div style={{ width: '100%', maxWidth: 800, margin: '0 auto', padding: '16px 0' }}>
               {docxPages.map((pageText, idx) => (
@@ -424,7 +494,7 @@ export default function Reader({ book, onPageChange, onBack }) {
           {!loading && !isText && pdfData && (
             <Document
               file={pdfData}
-              loading={<div style={{ padding: 40, color: '#909399', textAlign: 'center' }}>📖 正在加载文档...</div>}
+              loading={<div style={{ padding: 40, color: '#909399', textAlign: 'center', whiteSpace: 'nowrap' }}>📖 正在加载文档...</div>}
               onLoadSuccess={onLoadSuccess}
               onLoadError={(e) => { console.error('PDF error:', e); message.error(`PDF加载失败`) }}
             >
@@ -432,13 +502,21 @@ export default function Reader({ book, onPageChange, onBack }) {
               <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
                 {visiblePages.map(p => (
                   <div key={p} style={{ position: 'absolute', top: pageOffsets[p - 1], left: '50%', transform: 'translateX(-50%)' }}>
-                    <Page
-                      pageNumber={p}
-                      scale={scale}
-                      loading={<div style={{ padding: 20, color: '#909399', textAlign: 'center', fontSize: 12 }}>加载中...</div>}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={false}
-                    />
+                    {/* canvas 按 renderScale 光栅化，显示大小再用 CSS 缩放。
+                        scale 变化（开关目录导致的宽度变化）只动这一层 transform，
+                        不碰 Page 的 scale，于是画布不会重建，也就不会闪。 */}
+                    <div style={{
+                      transform: `scale(${scale / renderScale})`,
+                      transformOrigin: 'top center',
+                    }}>
+                      <Page
+                        pageNumber={p}
+                        scale={renderScale}
+                        loading={null}   /* 虚拟滚动下每滚出一页都会闪一下"加载中"，去掉 */
+                        renderTextLayer={true}
+                        renderAnnotationLayer={false}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>

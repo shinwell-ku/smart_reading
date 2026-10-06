@@ -48,6 +48,111 @@ class DocumentParser:
         else:
             raise ValueError(f"不支持的文件格式: {ext}")
 
+    # 小于此字号的文本一律视为隐形。正常正文在 9~12pt，
+    # 而这个阈值只用来挡那些 0.0x pt 的隐形锚点，不会误伤小字注释。
+    MIN_VISIBLE_FONT = 1.0
+
+    def _page_lines_with_pos(self, page, min_size=None):
+        """
+        取页面可见文本，保留每行的 y 坐标。返回 [(文本, y, 页高)]。
+
+        丢字号小到看不见的 span：部分 PDF（尤其电子书）会在文本层塞入
+        0.007pt 的隐形标记，形如 'idx_3a027a18'，肉眼看不见也不占位，
+        但会被划选带出来，也会混进翻译、检索和知识抽取。
+
+        用 get_text('dict') 而不是 get_text()：后者既拿不到字号，
+        也拿不到坐标。
+        """
+        limit = self.MIN_VISIBLE_FONT if min_size is None else min_size
+        height = page.rect.height or 1
+        out = []
+        for block in page.get_text('dict').get('blocks', []):
+            for line in block.get('lines', []):
+                parts = [
+                    s.get('text', '')
+                    for s in line.get('spans', [])
+                    if s.get('text') and s.get('size', 0) >= limit
+                ]
+                text = ''.join(parts).strip()
+                if text:
+                    out.append((text, line['bbox'][1], height))
+        return out
+
+    def _page_text_visible(self, page, min_size=None):
+        """只要文本（无坐标）时的便捷入口"""
+        return '\n'.join(t for t, _, _ in self._page_lines_with_pos(page, min_size))
+
+    # 书眉判定参数
+    BAND_RATIO = 0.07      # 页面上下各 7% 视为页眉/页脚带
+    REPEAT_PAGES = 3       # 同一文本出现在这么多页的边带里，才算书眉
+
+    @staticmethod
+    def _is_page_number(s):
+        """纯页码（阿拉伯数字或罗马数字），长度设上限以免误伤正文里的数字"""
+        s = (s or '').strip()
+        if not s or len(s) > 8:
+            return False
+        return bool(re.fullmatch(r'\d{1,4}|[ivxlcdmIVXLCDM]{1,7}', s))
+
+    def _strip_running_heads(self, page_lines):
+        """
+        去掉页眉页脚。入参是每页的 [(文本, y, 页高)]，返回清洗后的每页文本。
+
+        为什么用坐标而不是纯文本频率：O'Reilly/Manning 这类电子书的书眉
+        是**按章变化**的（CHAPTER 1 只出现在第 1 章那几十页），全书频率
+        最高也才 6%，任何按重复率设阈值的做法都抓不到。
+        但它的 y 坐标极其稳定 —— 实测四页的页眉都在 y≈27pt、正文从 y≈53pt
+        开始。用位置判定还有额外好处：同一段文字作为「书眉」和作为「正文
+        标题」出现时，靠坐标就能区分开，不会误删正文里那一份。
+
+        规则（仅作用于页眉/页脚带内的行）：
+          - 纯页码 → 直接去（页码逐页不同，不能靠重复判定）
+          - 同一文本在 ≥3 页的边带里出现过 → 去
+        页数太少时不判断，直接返回原文。
+        """
+        if not page_lines or len(page_lines) < 5:
+            return ['\n'.join(t for t, _, _ in ls) for ls in (page_lines or [])]
+
+        n = len(page_lines)
+        band_c = Counter()
+        head_nums = tail_nums = 0
+
+        for lines in page_lines:
+            if not lines:
+                continue
+            h = lines[0][2]
+            top = [t for t, y, _ in lines if y < h * self.BAND_RATIO]
+            bot = [t for t, y, _ in lines if y > h * (1 - self.BAND_RATIO)]
+            band_c.update(set(top))
+            band_c.update(set(bot))
+            if any(self._is_page_number(t) for t in top):
+                head_nums += 1
+            if any(self._is_page_number(t) for t in bot):
+                tail_nums += 1
+
+        repeated = {t for t, c in band_c.items() if c >= self.REPEAT_PAGES}
+        # 页码也要「多数页的边带里真有数字」才动手，
+        # 否则一本正文里遍地数字的书（数据表）会被当成页脚削掉内容
+        strip_num_head = head_nums > n * 0.5
+        strip_num_tail = tail_nums > n * 0.5
+
+        out = []
+        for lines in page_lines:
+            h = lines[0][2] if lines else 1
+            kept = []
+            for text, y, _ in lines:
+                in_band = y < h * self.BAND_RATIO or y > h * (1 - self.BAND_RATIO)
+                if in_band:
+                    if text in repeated:
+                        continue
+                    if self._is_page_number(text):
+                        if (y < h * self.BAND_RATIO and strip_num_head) or \
+                           (y > h * (1 - self.BAND_RATIO) and strip_num_tail):
+                            continue
+                kept.append(text)
+            out.append('\n'.join(kept))
+        return out
+
     def _parse_pdf(self, file_path):
         """
         解析 PDF 文件
@@ -64,6 +169,7 @@ class DocumentParser:
 
         pages = []
         full_text_parts = []
+        page_lines = []      # 每页的 [(文本, y, 页高)]，用于剔除页眉页脚
         chapters = []
         scan_page_count = 0  # 扫描页计数
         text_page_count = 0  # 文本页计数
@@ -78,7 +184,10 @@ class DocumentParser:
 
         for page_num in range(total_pages):
             page = doc.load_page(page_num)
-            text = page.get_text()
+            # 带 y 坐标收集，后面据此剔除页眉页脚
+            lines = self._page_lines_with_pos(page)
+            page_lines.append(lines)
+            text = '\n'.join(t for t, _, _ in lines)
 
             if text.strip():
                 text_page_count += 1
@@ -95,6 +204,11 @@ class DocumentParser:
             chapters = self._extract_pdf_outline_by_font(doc)
 
         doc.close()
+
+        # 去掉页眉页脚（页码 + 跨页重复的书名/章节名）。
+        # 必须在这里做：判断哪一行是书眉要看整本书的分布，单页看不出来。
+        pages = self._strip_running_heads(page_lines)
+        full_text_parts = list(pages)
 
         full_text = '\n'.join(full_text_parts)
         total_chars = len(full_text.replace(' ', '').replace('\n', ''))

@@ -64,15 +64,17 @@ function fixPyvenvConfig() {
 }
 
 function getPythonCommand() {
-  // 生产模式（已打包）：修正 pyvenv.cfg + 使用打包的 venv
-  if (isPackaged) {
-    fixPyvenvConfig();
-    const bundledPython = venvPythonPath();
-    if (fs.existsSync(bundledPython)) {
-      return bundledPython;
-    }
+  // 打包版才需要修 pyvenv.cfg —— 打包脚本写的是构建机的路径。
+  // 开发版仓库里的 .venv 的 pyvenv.cfg 本来就是对的，改它反而会弄坏。
+  if (isPackaged) fixPyvenvConfig();
+
+  // 两种模式都优先用自带的 venv：依赖齐全（系统 Python 常常缺 openai 等包）
+  const venvPython = venvPythonPath();
+  if (fs.existsSync(venvPython)) {
+    return venvPython;
   }
-  // 开发模式：尝试多个系统 Python 命令
+
+  // 没有 venv（比如刚 clone 还没 uv sync）时退回系统 Python
   const candidates = ['python3', 'python', 'python3.11', 'python3.10'];
   for (const cmd of candidates) {
     try {

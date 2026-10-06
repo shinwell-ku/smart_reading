@@ -4,7 +4,7 @@ html, body, #root { height: 100%; overflow: hidden; font-family: -apple-system, 
 .app { display: flex; flex-direction: column; height: 100vh; }
 
 /* TopBar */
-.topbar { display: flex; align-items: center; height: 44px; background: linear-gradient(135deg, #0d2b45, #1c7c94); padding: 0 12px; gap: 2px; flex-shrink: 0; }
+.topbar { display: flex; align-items: center; height: 44px; background: linear-gradient(135deg, #1c1c1e, #3d3d42); padding: 0 12px; gap: 2px; flex-shrink: 0; }
 .topbar-logo { display: flex; align-items: center; gap: 6px; color: #fff; font-size: 15px; font-weight: 600; padding: 0 10px 0 4px; }
 .topbar-logo img { width: 28px; height: 28px; border-radius: 4px; }
 .topbar-btn { padding: 5px 10px; border-radius: 4px; font-size: 12px; color: rgba(255,255,255,0.7); cursor: pointer; background: none; border: none; transition: all 0.15s; }
