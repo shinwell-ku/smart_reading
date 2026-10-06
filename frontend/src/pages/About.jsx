@@ -14,7 +14,9 @@ export default function AboutModal({ open, onClose }) {
       <div style={{ textAlign: 'center' }}>
         <img src="./logo.png" alt="AI智慧阅读" style={{ width: 64, height: 64, borderRadius: 12, marginBottom: 12 }} />
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>AI智慧阅读</h2>
-        <p style={{ color: '#909399', marginBottom: 12 }}>v1.0.0</p>
+        {/* 版本号来自 frontend/package.json，由 vite.config.js 注入，
+            发版时只改那一处 */}
+        <p style={{ color: '#909399', marginBottom: 12 }}>v{__APP_VERSION__}</p>
         <p style={{ color: '#606266', marginBottom: 4 }}>AI 翻译 · 知识图谱 · 多格式阅读</p>
         <p style={{ color: '#409eff', fontWeight: 500, marginBottom: 20 }}>
           用心做好简单、高效、易用的小工具
