@@ -107,10 +107,12 @@ uv run python app.py           # → http://127.0.0.1:5001
 
 ```bash
 cd frontend
-npm run build:mac        # → AI智慧阅读-1.0.0.dmg（实测 176 MB）
-npm run build:win        # → AI智慧阅读-Setup-1.0.0.exe
+npm run build:mac        # → AI-SmartReading-1.0.0.dmg（实测 176 MB）
+npm run build:win        # → AI-SmartReading-Setup-1.0.0.exe
 npm run build:all        # 两个都要（仅同平台可打的那个会成功）
 ```
+
+> 安装包文件名是英文，但**安装后显示的应用名是中文「AI智慧阅读」**（`productName`）。文件名用英文是因为 Release 上传时中文会被 GitHub 剥掉。
 
 脚本做的事：复制 `backend/` 代码 → 复制 `.venv/` 并让它**脱离本机也能跑** → 创建 `data/{db,books,cache,exports}` 占位 → 编译前端 → 调 electron-builder。
 
@@ -145,10 +147,79 @@ uv sync
 # 3. 打包
 cd ..\frontend
 npm install
-npm run build:win        # → release\AI智慧阅读-Setup-1.0.0.exe
+npm run build:win        # → release\AI-SmartReading-Setup-1.0.0.exe
 ```
 
 脚本的 `preflight` 会自己挡住跨平台误操作：venv 布局与宿主机对不上、或目标平台不是当前平台，都会直接报错退出 —— 而不是产出一个装到用户机器上才发现的坏包。
+
+### 发布新版本
+
+以发 `1.0.1` 为例，顺序不能颠倒。
+
+#### 1. 改版本号
+
+```bash
+cd frontend
+npm version patch --no-git-tag-version     # patch 修 bug / minor 加功能 / major 不兼容
+```
+
+**`--no-git-tag-version` 不能省** —— 否则 npm 会自己替你 commit 并打 tag，和下面手动控制的流程打架。
+
+版本号是**单点来源**：安装包文件名（electron-builder 的 `${version}`）和「关于」页（`vite.config.js` 注入的 `__APP_VERSION__`）都从 `frontend/package.json` 取，改这一处就够。
+
+#### 2. 打包
+
+```bash
+npm run build:mac                  # → frontend/release/AI-SmartReading-1.0.1.dmg
+```
+
+Windows 包**必须在 Windows 机器上**构建（见上一节）：
+
+```powershell
+cd backend ; uv sync
+cd ..\frontend ; npm run build:win
+```
+
+#### 3. 提交并打 tag
+
+```bash
+cd ..
+git add -A
+git commit -m "chore: 发布 v1.0.1"
+git push
+
+git tag v1.0.1                     # tag 名必须和 package.json 的版本一致，v 前缀别丢
+git push origin v1.0.1
+```
+
+> 先推提交、再推 tag。如果 tag 打错了要挪位置，得删掉重建：
+> `git push origin :refs/tags/v1.0.1` 然后重新 `git tag` + `git push`。
+
+#### 4. 建 Release
+
+GitHub → **Releases → Draft a new release**
+
+| 字段 | 填什么 |
+|---|---|
+| Choose a tag | 选刚推上去的 `v1.0.1`（**选已有的**，不要在 Release 页新建同名 tag） |
+| Release title | `v1.0.1 — <一句话说明>` |
+| Describe this release | 写这一版改了什么 |
+| Release label | 不填 |
+| 附件 | `frontend/release/AI-SmartReading-1.0.1.dmg` |
+
+**两个坑**：
+
+- **附件名只能是纯英文。** GitHub 上传时会把中文剥掉 —— `AI智慧阅读-1.0.0.dmg` 会变成 `AI.-1.0.0.dmg`，下载的人会以为文件坏了。`electron-builder.json` 的 `artifactName` 已经配成英文，正常打包不会踩到；手工改过名的话自己留意。
+- **别传 `.blockmap` 和 `.yml`。** 那是 electron-builder 的增量更新元数据，没有配套的更新服务就没用，传上去只会让用户困惑。
+
+#### 5. 验证
+
+```bash
+curl -sIL "https://github.com/<用户名>/smart_reading/releases/download/v1.0.1/AI-SmartReading-1.0.1.dmg" \
+  | grep -iE "^HTTP|content-length|content-disposition"
+```
+
+应当返回 `200`，且 `content-disposition` 里的文件名是完整的英文名。
 
 ## 📁 项目结构
 
