@@ -52,20 +52,31 @@ class DocumentParser:
     # 而这个阈值只用来挡那些 0.0x pt 的隐形锚点，不会误伤小字注释。
     MIN_VISIBLE_FONT = 1.0
 
+    # 视觉行归并参数
+    LINE_Y_TOL = 2.0        # 两行 y 相差小于此值，算同一视觉行
+    LINE_MERGE_GAP = 12.0   # 同一视觉行内水平间距小于此值就接上，否则各自成行
+
     def _page_lines_with_pos(self, page, min_size=None):
         """
-        取页面可见文本，保留每行的 y 坐标。返回 [(文本, y, 页高)]。
+        取页面可见文本，按**视觉顺序**返回 [(文本, y, 页高)]。
 
-        丢字号小到看不见的 span：部分 PDF（尤其电子书）会在文本层塞入
-        0.007pt 的隐形标记，形如 'idx_3a027a18'，肉眼看不见也不占位，
-        但会被划选带出来，也会混进翻译、检索和知识抽取。
+        做两件事：
 
-        用 get_text('dict') 而不是 get_text()：后者既拿不到字号，
-        也拿不到坐标。
+        1. 丢掉字号小到看不见的 span。部分 PDF（尤其电子书）会在文本层塞入
+           0.007pt 的隐形标记，形如 'idx_3a027a18'，肉眼看不见也不占位，
+           却会被划选带出来，也会混进翻译、检索和知识抽取。
+
+        2. 按坐标重排。`get_text('dict')` 给的是**内容流顺序**而非阅读顺序：
+           列表符号（•/◦）常被画在正文之后，于是一整页的符号全堆到页末；
+           隐形锚点还会把一句话切成好几个 <line>。这里按 y 分行、行内按 x
+           排序，间距够小的接回一行。
+
+        用 get_text('dict') 而不是 get_text()：后者既拿不到字号，也拿不到坐标。
         """
         limit = self.MIN_VISIBLE_FONT if min_size is None else min_size
         height = page.rect.height or 1
-        out = []
+
+        raw = []
         for block in page.get_text('dict').get('blocks', []):
             for line in block.get('lines', []):
                 parts = [
@@ -75,8 +86,44 @@ class DocumentParser:
                 ]
                 text = ''.join(parts).strip()
                 if text:
-                    out.append((text, line['bbox'][1], height))
+                    x0, y0, x1, _ = line['bbox']
+                    raw.append((y0, x0, x1, text))
+        if not raw:
+            return []
+
+        raw.sort(key=lambda r: (r[0], r[1]))
+
+        out = []
+        row, row_y = [], None
+        for y0, x0, x1, text in raw:
+            if row and y0 - row_y > self.LINE_Y_TOL:
+                out.extend(self._split_row(row, row_y, height))
+                row = []
+            if not row:
+                row_y = y0
+            row.append((x0, x1, text))
+        if row:
+            out.extend(self._split_row(row, row_y, height))
         return out
+
+    def _split_row(self, row, y, height):
+        """
+        同一视觉行内按水平间距切段：间距小的接上，间距大的各自成行。
+
+        后者是必要的 —— 页眉常把页码和书名左右分置（实测 x 相距 316pt），
+        接起来会变成 '11 What Are AI Agents?'，反而不利于后面的书眉判定。
+        """
+        row.sort(key=lambda r: r[0])
+        segs, cur, prev_x1 = [], row[0][2], row[0][1]
+        for x0, x1, text in row[1:]:
+            if x0 - prev_x1 <= self.LINE_MERGE_GAP:
+                cur += ' ' + text
+            else:
+                segs.append((cur, y, height))
+                cur = text
+            prev_x1 = x1
+        segs.append((cur, y, height))
+        return segs
 
     def _page_text_visible(self, page, min_size=None):
         """只要文本（无坐标）时的便捷入口"""
