@@ -2,9 +2,11 @@
 搜索路由 — 全书关键词检索
 """
 import os
-import json
 from flask import Blueprint, jsonify, request
 from core.config import CACHE_DIR
+from core.database import get_db
+from models import Book
+from services import page_cache
 from schemas import SearchResponse, SearchResult
 
 search_bp = Blueprint('search', __name__, url_prefix='/api/search')
@@ -24,17 +26,14 @@ def search_book(book_id):
         text = f.read()
 
     # 构建行号→页码映射（基于缓存的分页数据）
-    pages_path = os.path.join(CACHE_DIR, f'book_{book_id}_pages.json')
+    book = get_db().query(Book).get(book_id)
+    pages = page_cache.load(book) if book else []
     line_to_page = {}
-    if os.path.exists(pages_path):
-        with open(pages_path, 'r', encoding='utf-8') as f:
-            pages = json.load(f)
-        line_no = 0
-        for page_idx, page_text in enumerate(pages):
-            page_lines = page_text.split('\n')
-            for _ in page_lines:
-                line_no += 1
-                line_to_page[line_no] = page_idx + 1  # 页码从1开始
+    line_no = 0
+    for page_idx, page_text in enumerate(pages):
+        for _ in (page_text or '').split('\n'):
+            line_no += 1
+            line_to_page[line_no] = page_idx + 1  # 页码从1开始
 
     results = []
     lines = text.split('\n')

@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request, send_file
 from core.database import get_db
 from core.config import CACHE_DIR, EXPORTS_DIR
 from core.config import get_knowledge_extractor
+from services import page_cache
 from models import Book, KnowledgeNode, KnowledgeEdge
 from schemas import GraphData, GraphUpdate, MessageResponse
 
@@ -64,11 +65,8 @@ def extract_knowledge(book_id):
                 full_text = f.read()
 
             # 分页文本用于给图谱节点标注页码（双击节点跳原文要用）
-            pages_path = os.path.join(CACHE_DIR, f'book_{book_id}_pages.json')
-            pages = None
-            if os.path.exists(pages_path):
-                with open(pages_path, 'r', encoding='utf-8') as f:
-                    pages = json.load(f)
+            book = get_db().query(Book).get(book_id)
+            pages = (page_cache.load(book) if book else []) or None
 
             extractor = get_knowledge_extractor()
             result = extractor.extract(full_text, pages=pages, on_progress=on_progress)

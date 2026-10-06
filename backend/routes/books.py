@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request, send_file
 from core.database import get_db
 from core.config import BOOKS_DIR, CACHE_DIR
 from core.config import get_doc_parser
+from services import page_cache
 from models import Book
 from schemas import BookResponse, BookListResponse, BookImportResult, MessageResponse
 
@@ -97,13 +98,7 @@ def import_book():
         db.commit()
         db.refresh(book)
 
-        full_text = result.get('full_text', '')
-        with open(os.path.join(CACHE_DIR, f'book_{book.id}_text.txt'), 'w', encoding='utf-8') as f:
-            f.write(full_text)
-
-        pages = result.get('pages', [])
-        with open(os.path.join(CACHE_DIR, f'book_{book.id}_pages.json'), 'w', encoding='utf-8') as f:
-            json.dump(pages, f, ensure_ascii=False)
+        page_cache.write(book.id, result.get('pages', []), result.get('full_text', ''))
 
         # 提取封面缩略图
         try:
@@ -194,13 +189,7 @@ def import_book_by_path():
         db.commit()
         db.refresh(book)
 
-        full_text = result.get('full_text', '')
-        with open(os.path.join(CACHE_DIR, f'book_{book.id}_text.txt'), 'w', encoding='utf-8') as f:
-            f.write(full_text)
-
-        pages = result.get('pages', [])
-        with open(os.path.join(CACHE_DIR, f'book_{book.id}_pages.json'), 'w', encoding='utf-8') as f:
-            json.dump(pages, f, ensure_ascii=False)
+        page_cache.write(book.id, result.get('pages', []), result.get('full_text', ''))
 
         # 生成封面
         try:
@@ -326,7 +315,12 @@ def delete_book(book_id):
 @books_bp.route('/<int:book_id>/full_text', methods=['GET'])
 def get_book_full_text(book_id):
     """获取书籍全文（供连续滚动阅读）"""
-    text_path = os.path.join(CACHE_DIR, f'book_{book_id}_text.txt')
+    book = get_db().query(Book).get(book_id)
+    if book:
+        # 缓存可能是旧解析器写的（比如从旧备份恢复回来），安排一次后台重建
+        page_cache.touch(book)
+
+    text_path = page_cache.text_path(book_id)
     if not os.path.exists(text_path):
         return jsonify({"error": "全文不存在"}), 404
     return send_file(text_path, mimetype='text/plain; charset=utf-8')
@@ -334,12 +328,11 @@ def get_book_full_text(book_id):
 
 @books_bp.route('/<int:book_id>/page/<int:page_num>', methods=['GET'])
 def get_page_content(book_id, page_num):
-    pages_path = os.path.join(CACHE_DIR, f'book_{book_id}_pages.json')
-    if not os.path.exists(pages_path):
-        return jsonify({"error": "页面数据不存在"}), 404
+    book = get_db().query(Book).get(book_id)
+    pages = page_cache.load(book) if book else page_cache.read(book_id)[0]
 
-    with open(pages_path, 'r', encoding='utf-8') as f:
-        pages = json.load(f)
+    if not pages:
+        return jsonify({"error": "页面数据不存在"}), 404
 
     if page_num < 1 or page_num > len(pages):
         return jsonify({"error": "页码超出范围"}), 400

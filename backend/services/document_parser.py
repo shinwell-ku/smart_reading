@@ -10,6 +10,11 @@ import json
 import tempfile
 from collections import Counter
 
+# 解析结果的格式版本。改动会改变输出的逻辑（清洗规则、排序方式、分页口径）
+# 就 +1 —— services/page_cache.py 靠它判断磁盘上的缓存是不是该重建了，
+# 否则从旧备份恢复回来的旧缓存会一直以旧格式被读出来。
+PARSER_VERSION = 3
+
 # 块级元素：文本类格式按块产出「行」，模拟分页时按行数切
 _BLOCK_TAGS = {
     'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'pre',
