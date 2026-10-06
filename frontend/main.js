@@ -48,16 +48,26 @@ function venvPythonPath() {
   return path.join(venvBinDir(), process.platform === 'win32' ? 'python.exe' : 'python3');
 }
 
+// pyvenv.cfg 的 home 该指向哪：两个平台打包方式不同，见 scripts/build-package.mjs 顶部注释。
+//   macOS  —— 标准库和 libpython 塞在 venv 自己里，home 指向 venv 的 bin
+//   Windows —— 基础 Python 安装随包放在 backend/python-runtime，home 指向它
+function pythonHomeDir() {
+  if (process.platform === 'win32') {
+    return path.join(BACKEND_DIR, 'python-runtime');
+  }
+  return venvBinDir();
+}
+
 function fixPyvenvConfig() {
-  // 修正 pyvenv.cfg 中的 home 路径，使其指向打包后的 venv 实际位置
+  // 打包脚本写的是构建机的绝对路径，换台机器就失效，所以每次启动都改回本机实际位置
   const pyvenvPath = path.join(BACKEND_DIR, '.venv', 'pyvenv.cfg');
   if (!fs.existsSync(pyvenvPath)) return;
   try {
-    const binDir = venvBinDir();
+    const homeDir = pythonHomeDir();
     let content = fs.readFileSync(pyvenvPath, 'utf-8');
-    content = content.replace(/^home = .*/m, `home = ${binDir}`);
+    content = content.replace(/^[ \t]*home[ \t]*=.*$/m, `home = ${homeDir}`);
     fs.writeFileSync(pyvenvPath, content, 'utf-8');
-    console.log(`[主进程] pyvenv.cfg home 已修正: ${binDir}`);
+    console.log(`[主进程] pyvenv.cfg home 已修正: ${homeDir}`);
   } catch (e) {
     console.error('[主进程] pyvenv.cfg 修正失败:', e);
   }

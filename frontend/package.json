@@ -4,10 +4,10 @@
   "description": "AI智慧阅读 - AI 智能阅读软件，数据本地存储",
   "main": "main.js",
   "scripts": {
-    "build:win": "bash ../scripts/build_package.sh win",
-    "build:mac": "bash ../scripts/build_package.sh mac",
-    "build:all": "bash ../scripts/build_package.sh all",
-    "build": "vite build && sed -i '' 's/ crossorigin//g' dist/index.html",
+    "build:win": "node ../scripts/build-package.mjs win",
+    "build:mac": "node ../scripts/build-package.mjs mac",
+    "build:all": "node ../scripts/build-package.mjs all",
+    "build": "node scripts/build-renderer.mjs",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev"
   },

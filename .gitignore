@@ -33,6 +33,7 @@ data/db/*
 
 # 设计/需求文档：本地留存，不入库（含第三方资料）
 doc/
+CLAUDE.md
 
 # IDE
 .vscode/
@@ -47,3 +48,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+
+

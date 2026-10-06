@@ -103,42 +103,52 @@ uv run python app.py           # → http://127.0.0.1:5001
 
 ### 打包为安装程序
 
-产物在 `frontend/release/`。
-
-#### macOS
+产物在 `frontend/release/`。两个平台共用一个打包脚本 `scripts/build-package.mjs`（Node 写的，不需要 bash / Git Bash）：
 
 ```bash
 cd frontend
 npm run build:mac        # → AI智慧阅读-1.0.0.dmg（实测 176 MB）
+npm run build:win        # → AI智慧阅读-Setup-1.0.0.exe
+npm run build:all        # 两个都要（仅同平台可打的那个会成功）
 ```
 
-打包脚本会：复制 `backend/` 代码 → 复制 `.venv/` 并把 Python 标准库、`libpython3.10.dylib` 一起塞进去（使 venv 脱离本机也能跑）→ 创建 `data/{db,books,cache,exports}` 占位 → 编译前端 → 调 electron-builder。
+脚本做的事：复制 `backend/` 代码 → 复制 `.venv/` 并让它**脱离本机也能跑** → 创建 `data/{db,books,cache,exports}` 占位 → 编译前端 → 调 electron-builder。
 
 **不打包任何模型权重**，安装后无需装 Python。
 
-> ⚠️ `data/` 在安装包里是**空目录**，electron-builder 会跳过空目录，所以包内没有它 —— 首次启动时由主进程/后端自动创建。因此**应用必须安装到可写位置**（默认的 `/Applications` 可以）。
+> ⚠️ `data/` 在安装包里是**空目录**，electron-builder 会跳过空目录，所以包内没有它 —— 首次启动时由主进程/后端自动创建。因此**应用必须安装到可写位置**（默认的 `/Applications` 或 `%LOCALAPPDATA%` 都可以）。
 
-#### Windows
+#### Python 运行环境是怎么跟进包里的
 
-**目前不能直接 `npm run build:win`，也不能在 macOS 上交叉打包。** 两个原因：
+两个平台的放法不同，脚本内部分派：
 
-1. **`backend/.venv` 是平台绑定的** —— 里面是 macOS 的 Mach-O 二进制和 POSIX 目录布局（`bin/` + `lib/python3.10/`）。直接塞进 Windows 安装包，装上去后端起不来。
-2. **打包脚本是 macOS 专用的** —— `scripts/build_package.sh` 依赖 `rsync`、`cp -rL`、GNU `find`、BSD `sed -i ''`，并写死了 `libpython3.10.dylib` 和 `python3` 等路径。
+| | macOS | Windows |
+|---|---|---|
+| 标准库 | `.venv/lib/python3.10/` | `backend/python-runtime/Lib/` |
+| 运行时链接库 | `libpython3.10.dylib` → `.venv/lib/` | `python310.dll` → `python-runtime/` **和** `.venv/Scripts/` |
+| `pyvenv.cfg` 的 `home` | `.venv/bin` | `backend/python-runtime` |
 
-**必须在 Windows 机器上构建**：
+原因是 POSIX 版 CPython 发现自己在 `bin/` 目录里时会自动往上一层找 prefix，Windows 版没有这条规则 —— 所以 Windows 侧直接给出一份完整的 Python 安装目录（`python.exe` 与 `Lib/`、`DLLs/` 同级），CPython 必然认得。
+`frontend/main.js` 每次启动还会按同样规则再改一次 `pyvenv.cfg`，把构建机的绝对路径覆盖掉。
+
+#### Windows 打包
+
+**不能交叉打包，必须在 Windows 机器上构建。**
 
 ```powershell
 # 1. 准备：Python 3.10、Node 18+、uv（https://docs.astral.sh/uv/）
 
-# 2. 建 Windows 版 venv（不能复用 macOS 的）
+# 2. 建 Windows 版 venv —— 不能复用 macOS 的，那里面是 Mach-O 二进制
 cd backend
 uv sync
 
 # 3. 打包
-#    需要一个 Windows 版的打包脚本，见 CLAUDE.md「Windows 打包移植」一节的对照表
+cd ..\frontend
+npm install
+npm run build:win        # → release\AI智慧阅读-Setup-1.0.0.exe
 ```
 
-运行时的平台差异（Python 路径、残留进程清理等）**已经处理好了**，见 `frontend/main.js` 里按 `process.platform` 分派的部分；缺的只是打包脚本。
+脚本的 `preflight` 会自己挡住跨平台误操作：venv 布局与宿主机对不上、或目标平台不是当前平台，都会直接报错退出 —— 而不是产出一个装到用户机器上才发现的坏包。
 
 ## 📁 项目结构
 
@@ -177,8 +187,8 @@ smart_reading/
 │   ├── config/                # 应用配置（translator.json）
 │   └── exports/               # 导出/备份
 ├── scripts/
-│   └── build_package.sh       # 安装包构建脚本
-├── CLAUDE.md                  # AI 辅助开发指南
+│   └── build-package.mjs      # 安装包构建脚本（macOS / Windows 通用）
+├── LICENSE
 └── README.md
 ```
 
@@ -230,6 +240,8 @@ smart_reading/
 
 ## 📄 License
 
-MIT License
+[MIT](LICENSE) © 2026 Shinwell
+
+安装包内含 Electron、Python 3.10 运行时及若干开源依赖，各自的许可证随包分发，详见各组件的 LICENSE 文件。
 
 ---
