@@ -6,9 +6,11 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url'
 import { useSpeech, useTtsPrefs, resolveVoice, isSupported as ttsSupported } from '../useSpeech'
+import { useI18n } from '../i18n'
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
 export default function Reader({ book, onPageChange, onBack }) {
+  const { t, langName } = useI18n()
   const [numPages, setNumPages] = useState(0)
   const [page, setPage] = useState(1)       // 当前可见页
   const [scale, setScale] = useState(1)          // 显示缩放（CSS transform 用）
@@ -75,7 +77,7 @@ export default function Reader({ book, onPageChange, onBack }) {
           setLoading(false)
         } catch (e) {
           console.error('DOCX load error:', e)
-          message.error('文档加载失败')
+          message.error(t('reader.loadFailed'))
           setLoading(false)
         }
       })()
@@ -93,7 +95,7 @@ export default function Reader({ book, onPageChange, onBack }) {
           setLoading(false)
         } catch (e) {
           console.error('PDF load error:', e)
-          message.error('PDF 加载失败')
+          message.error(t('reader.pdfLoadFailed'))
           setLoading(false)
         }
       })()
@@ -126,7 +128,7 @@ export default function Reader({ book, onPageChange, onBack }) {
         if (r.content) parts.push(r.content)
       } catch {}
     }
-    setDocxPages(parts.length ? parts : ['暂无内容'])
+    setDocxPages(parts.length ? parts : [t('reader.empty')])
     setDocxAllText(parts.join('\n'))
   }
 
@@ -360,14 +362,14 @@ export default function Reader({ book, onPageChange, onBack }) {
   readPageRef.current = useCallback(async (p) => {
     if (!ttsVoice) {
       notification.warning({
-        message: '系统里没有可用的语音',
-        description: `找不到「${ttsPrefs.lang === 'zh' ? '中文' : ttsPrefs.lang}」语音，朗读无法开始。`,
+        message: t('reader.noVoice'),
+        description: t('reader.noVoiceDesc', { lang: langName(ttsPrefs.lang) }),
         duration: 8,
       })
       return
     }
     const text = await fetchPageText(p)
-    if (!text) { message.info(`第 ${p} 页没有可朗读的文字`); return }
+    if (!text) { message.info(t('reader.noTextPage', { page: p })); return }
     readingPageRef.current = p
     speech.speak(text, {
       voice: ttsVoice,
@@ -386,7 +388,7 @@ export default function Reader({ book, onPageChange, onBack }) {
   const toggleReadPage = useCallback(() => {
     if (speech.state === 'playing') return speech.pause()
     if (speech.state === 'paused') return speech.resume()
-    if (!ttsSupported) { message.warning('当前环境不支持语音合成'); return }
+    if (!ttsSupported) { message.warning(t('reader.ttsUnsupported')); return }
     readPageRef.current?.(pageRef.current)
   }, [speech])
 
@@ -485,56 +487,56 @@ export default function Reader({ book, onPageChange, onBack }) {
   return (
     <>
       <div className="reader-toolbar">
-        <Tooltip title="返回书库"><Button type="text" onClick={onBack}>←</Button></Tooltip>
+        <Tooltip title={t('reader.back')}><Button type="text" onClick={onBack}>←</Button></Tooltip>
         <span className="reader-title">{book?.title || ''}</span>
-        <Tooltip title="目录"><Button type="text" disabled={!chapters.length} onClick={() => setOutlineOpen(v => !v)} style={{ color: outlineOpen ? '#409eff' : undefined }} icon={<BarsOutlined />} /></Tooltip>
-        <Tooltip title="缩小"><Button type="text" disabled={!numPages} icon={<ZoomOutOutlined />} onClick={() => {
+        <Tooltip title={t('reader.outline')}><Button type="text" disabled={!chapters.length} onClick={() => setOutlineOpen(v => !v)} style={{ color: outlineOpen ? '#409eff' : undefined }} icon={<BarsOutlined />} /></Tooltip>
+        <Tooltip title={t('reader.zoomOut')}><Button type="text" disabled={!numPages} icon={<ZoomOutOutlined />} onClick={() => {
           if (isText) setTextFontSize(s => Math.max(9, s - 2))
           else setScale(s => Math.max(0.5, s - 0.2))
         }} /></Tooltip>
         <span style={{ fontSize: 12, color: '#909399', minWidth: 36, textAlign: 'center' }}>
           {isText ? Math.round(textFontSize / 15 * 100) + '%' : Math.round(scale * 100) + '%'}
         </span>
-        <Tooltip title="放大"><Button type="text" disabled={!numPages} icon={<ZoomInOutlined />} onClick={() => {
+        <Tooltip title={t('reader.zoomIn')}><Button type="text" disabled={!numPages} icon={<ZoomInOutlined />} onClick={() => {
           if (isText) setTextFontSize(s => Math.min(36, s + 2))
           else setScale(s => Math.min(3, s + 0.2))
         }} /></Tooltip>
-        <Tooltip title="添加书签"><Button type="text" disabled={!numPages} icon={<StarOutlined />} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success('书签已添加: 第' + page + '页'); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }} /></Tooltip>
-        <Tooltip title={speech.state === 'playing' ? '暂停朗读' : speech.state === 'paused' ? '继续朗读' : '朗读本页'}>
+        <Tooltip title={t('reader.addBookmark')}><Button type="text" disabled={!numPages} icon={<StarOutlined />} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success(t('reader.bookmarkAdded', { page })); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }} /></Tooltip>
+        <Tooltip title={speech.state === 'playing' ? t('reader.speakPause') : speech.state === 'paused' ? t('reader.speakResume') : t('reader.speakPage')}>
           <Button type="text" disabled={!numPages} onClick={toggleReadPage}
                   style={{ color: speech.state !== 'idle' ? '#409eff' : undefined }}
                   icon={speech.state === 'playing' ? <PauseCircleOutlined /> : speech.state === 'paused' ? <PlayCircleOutlined /> : <SoundOutlined />} />
         </Tooltip>
         {speech.state !== 'idle' && (
           <>
-            <Tooltip title="停止朗读"><Button type="text" onClick={speech.stop} icon={<CloseCircleOutlined />} /></Tooltip>
+            <Tooltip title={t('reader.speakStop')}><Button type="text" onClick={speech.stop} icon={<CloseCircleOutlined />} /></Tooltip>
             <span style={{ fontSize: 11, color: '#909399', flexShrink: 0 }}>
-              {readingPageRef.current}页 {speech.index + 1}/{speech.sentences.length}句
+              {t('reader.speakProgress', { page: readingPageRef.current, i: speech.index + 1, total: speech.sentences.length })}
             </span>
           </>
         )}
         {/* 连续朗读是个「模式」不是一次性动作 —— 只靠图标颜色区分太弱，
             开启时给个底色，读起来就是「按下了」 */}
-        <Tooltip title={continuous ? '连续朗读已开启 · 点击关闭' : '连续朗读：读完当前页自动翻到下一页继续念'}>
+        <Tooltip title={continuous ? t('reader.continuousOn') : t('reader.continuousOff')}>
           <Button type="text" onClick={() => setContinuous(v => !v)}
                   icon={<RetweetOutlined />}
                   style={continuous
                     ? { color: '#409eff', background: '#e8f0fe' }
                     : undefined} />
         </Tooltip>
-        <Tooltip title="全屏"><Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button></Tooltip>
+        <Tooltip title={t('reader.fullscreen')}><Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button></Tooltip>
       </div>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {outlineOpen && chapters.length > 0 && (
           <>
             <div className="reader-outline" style={{ width: outlineWidth }}>
-              <div style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, color: '#606266', borderBottom: '1px solid #e4e7ed' }}>目录</div>
+              <div style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, color: '#606266', borderBottom: '1px solid #e4e7ed' }}>{t('reader.outline')}</div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
                 {renderChapters(chapters, 0, page, goTo)}
               </div>
             </div>
             {/* 拖动调宽：与右侧面板同一个 .split-handle 样式，方向相反（右拖变宽） */}
-            <div className="split-handle" title="拖动调整目录宽度"
+            <div className="split-handle" title={t('reader.outlineResize')}
               onMouseDown={(e) => {
                 e.preventDefault()
                 const startX = e.clientX
@@ -562,7 +564,7 @@ export default function Reader({ book, onPageChange, onBack }) {
         )}
         {/* 滚动容器 */}
         <div className="pdf-container" ref={scrollRef} onScroll={handleScroll} onMouseUp={handleSelect}>
-          {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center', whiteSpace: 'nowrap' }}>📖 加载中...</div>}
+          {loading && <div style={{ padding: 60, color: '#909399', textAlign: 'center', whiteSpace: 'nowrap' }}>{t('reader.loading')}</div>}
           {!loading && isText && (
             <div style={{ width: '100%', maxWidth: 800, margin: '0 auto', padding: '16px 0' }}>
               {docxPages.map((pageText, idx) => (
@@ -571,15 +573,15 @@ export default function Reader({ book, onPageChange, onBack }) {
                   {pageText}
                 </div>
               ))}
-              {!docxPages.length && (docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>暂无内容</div>)}
+              {!docxPages.length && (docxContent || <div style={{ padding: 60, color: '#c0c4cc', textAlign: 'center' }}>{t('reader.empty')}</div>)}
             </div>
           )}
           {!loading && !isText && pdfData && (
             <Document
               file={pdfData}
-              loading={<div style={{ padding: 40, color: '#909399', textAlign: 'center', whiteSpace: 'nowrap' }}>📖 正在加载文档...</div>}
+              loading={<div style={{ padding: 40, color: '#909399', textAlign: 'center', whiteSpace: 'nowrap' }}>{t('reader.loadingDoc')}</div>}
               onLoadSuccess={onLoadSuccess}
-              onLoadError={(e) => { console.error('PDF error:', e); message.error(`PDF加载失败`) }}
+              onLoadError={(e) => { console.error('PDF error:', e); message.error(t('reader.pdfLoadFailed')) }}
             >
               {/* 虚拟滚动：只渲染可见页 */}
               <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
@@ -609,7 +611,7 @@ export default function Reader({ book, onPageChange, onBack }) {
       </div>
       <div className="reader-footer">
         <Button type="text" disabled={page <= 1} onClick={() => goTo(page - 1)}>◀</Button>
-        <span style={{ fontSize: 12, color: '#606266', minWidth: 90, textAlign: 'center' }}>第 {page}/{numPages} 页</span>
+        <span style={{ fontSize: 12, color: '#606266', minWidth: 90, textAlign: 'center' }}>{t('reader.pageOf', { page, total: numPages })}</span>
         <Slider min={1} max={numPages || 1} value={page} onChange={goTo} style={{ flex: 1, maxWidth: 300, margin: '0 8px' }} />
         <Button type="text" disabled={page >= numPages} onClick={() => goTo(page + 1)}>▶</Button>
         <span style={{ fontSize: 11, color: '#c0c4cc', minWidth: 36 }}>{numPages > 0 ? Math.round(page / numPages * 100) + '%' : ''}</span>
