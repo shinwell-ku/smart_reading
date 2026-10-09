@@ -5,28 +5,30 @@ import { SettingOutlined, CloudServerOutlined, DatabaseOutlined, ReadOutlined, R
 import { loadVoices, readTtsPrefs, writeTtsPrefs, pickVoice, isSupported as ttsSupported } from '../useSpeech'
 import { useI18n, LANGS } from '../i18n'
 
+// label 存 i18n key 不存译文 —— t() 只能在渲染路径里调，这里存成常量
+// 的话切语言不会更新。
 const PROVIDER_OPTIONS = [
-  { group: '国内',
+  { group: 'settings.ai.group.cn',
     items: [
-      { value: 'deepseek',    label: 'DeepSeek',           base: 'https://api.deepseek.com',                        model: 'deepseek-chat' },
-      { value: 'siliconflow', label: '硅基流动',           base: 'https://api.siliconflow.cn/v1',                   model: 'Qwen/Qwen2.5-7B-Instruct' },
-      { value: 'moonshot',    label: '月之暗面 Moonshot',  base: 'https://api.moonshot.cn/v1',                      model: 'moonshot-v1-8k' },
-      { value: 'zhipu',       label: '智谱 GLM',           base: 'https://open.bigmodel.cn/api/paas/v4',            model: 'glm-4-flash' },
-      { value: 'qwen',        label: '阿里通义千问',       base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-      { value: 'doubao',      label: '字节豆包',           base: 'https://ark.cn-beijing.volces.com/api/v3',        model: 'doubao-pro-32k' },
-      { value: 'spark',       label: '讯飞星火',           base: 'https://spark-api-open.xf-yun.com/v1',            model: 'lite' },
+      { value: 'deepseek',    label: 'settings.provider.deepseek',    base: 'https://api.deepseek.com',                        model: 'deepseek-chat' },
+      { value: 'siliconflow', label: 'settings.provider.siliconflow', base: 'https://api.siliconflow.cn/v1',                   model: 'Qwen/Qwen2.5-7B-Instruct' },
+      { value: 'moonshot',    label: 'settings.provider.moonshot',    base: 'https://api.moonshot.cn/v1',                      model: 'moonshot-v1-8k' },
+      { value: 'zhipu',       label: 'settings.provider.zhipu',       base: 'https://open.bigmodel.cn/api/paas/v4',            model: 'glm-4-flash' },
+      { value: 'qwen',        label: 'settings.provider.qwen',        base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+      { value: 'doubao',      label: 'settings.provider.doubao',      base: 'https://ark.cn-beijing.volces.com/api/v3',        model: 'doubao-pro-32k' },
+      { value: 'spark',       label: 'settings.provider.spark',       base: 'https://spark-api-open.xf-yun.com/v1',            model: 'lite' },
     ] },
-  { group: '国际',
+  { group: 'settings.ai.group.intl',
     items: [
-      { value: 'openai',      label: 'OpenAI',             base: 'https://api.openai.com/v1',                       model: 'gpt-4o-mini' },
-      { value: 'anthropic',   label: 'Anthropic (需 proxy)', base: 'https://api.anthropic.com/v1',                   model: 'claude-sonnet-4-20250514' },
-      { value: 'google',      label: 'Google Gemini',      base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash' },
-      { value: 'xai',         label: 'xAI Grok',           base: 'https://api.x.ai/v1',                             model: 'grok-2' },
+      { value: 'openai',      label: 'settings.provider.openai',      base: 'https://api.openai.com/v1',                       model: 'gpt-4o-mini' },
+      { value: 'anthropic',   label: 'settings.provider.anthropic',   base: 'https://api.anthropic.com/v1',                    model: 'claude-sonnet-4-20250514' },
+      { value: 'google',      label: 'settings.provider.google',      base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash' },
+      { value: 'xai',         label: 'settings.provider.xai',         base: 'https://api.x.ai/v1',                             model: 'grok-2' },
     ] },
-  { group: '本地',
+  { group: 'settings.ai.group.local',
     items: [
-      { value: 'ollama',      label: 'Ollama',             base: 'http://localhost:11434/v1',                       model: 'llama3' },
-      { value: 'custom',      label: '自定义',             base: '',                                                 model: '' },
+      { value: 'ollama',      label: 'settings.provider.ollama',      base: 'http://localhost:11434/v1',                       model: 'llama3' },
+      { value: 'custom',      label: 'settings.provider.custom',      base: '',                                                 model: '' },
     ] },
 ]
 
@@ -60,7 +62,7 @@ function SliderWithValue({ value, ...rest }) {
 }
 
 export default function Settings({ open, onClose }) {
-  const { lang, t, setLang } = useI18n()
+  const { lang, t, setLang, langName } = useI18n()
   const [eyeCare, setEyeCare] = useState(localStorage.getItem('sr_eyeCare') === 'true')
 
   // ── 朗读偏好（存 localStorage，跟前后的 sr_* 一个路子）──
@@ -76,7 +78,7 @@ export default function Settings({ open, onClose }) {
       const bz = b.lang.toLowerCase().startsWith(ttsPrefs.lang) ? 0 : 1
       return az - bz || a.lang.localeCompare(b.lang) || a.name.localeCompare(b.name)
     })
-    .map(v => ({ value: v.voiceURI, label: `${v.name} · ${v.lang}${v.localService ? '' : '（在线）'}` }))
+    .map(v => ({ value: v.voiceURI, label: `${v.name} · ${v.lang}${v.localService ? '' : t('settings.tts.voice.online')}` }))
   const noVoiceHint = ttsSupported && ttsVoices.length > 0 && !pickVoice(ttsVoices, ttsPrefs.lang)
 
   const [provider, setProvider] = useState('openai')
@@ -127,14 +129,14 @@ export default function Settings({ open, onClose }) {
       await api.updateTranslatorConfig({
         remote: { provider, api_base: apiBase, api_key: apiKey, model, max_tokens: maxTokens, temperature },
       })
-      message.success('AI 配置已保存')
-    } catch { message.error('保存失败') }
+      message.success(t('settings.ai.saved'))
+    } catch { message.error(t('settings.ai.saveFailed')) }
   }
 
   // 拉取厂商可用模型列表（OpenAI 兼容的 GET /models）
   const loadModels = async () => {
-    if (!apiBase.trim()) { message.warning('请先填写接口地址'); return }
-    if (!apiKey.trim()) { message.warning('请先填写 API Key'); return }
+    if (!apiBase.trim()) { message.warning(t('settings.ai.needBase')); return }
+    if (!apiKey.trim()) { message.warning(t('settings.ai.needKey')); return }
     setLoadingModels(true)
     try {
       const r = await api.fetchModels({ api_base: apiBase.trim(), api_key: apiKey.trim() })
@@ -142,14 +144,14 @@ export default function Settings({ open, onClose }) {
       const list = r.models || []
       setModelOptions(list)
       if (list.length) {
-        message.success(`获取到 ${list.length} 个模型`)
+        message.success(t('settings.ai.modelsGot', { n: list.length }))
         // 拉到了就直接摊开，省得用户再去点一下输入框
         modelAtOpen.current = model
         setModelOpen(true)
       }
-      else message.warning('该接口未返回任何模型')
+      else message.warning(t('settings.ai.noModels'))
     } catch (e) {
-      message.error('获取模型列表失败：' + (e.message || '网络错误'))
+      message.error(t('settings.ai.listFailed', { msg: e.message || t('err.NETWORK') }))
     } finally {
       setLoadingModels(false)
     }
@@ -166,9 +168,9 @@ export default function Settings({ open, onClose }) {
     const d = new Date()
     const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
     const picked = await window.electronAPI.saveFileDialog({
-      title: '导出备份',
-      defaultPath: `AI智慧阅读备份_${stamp}.zip`,
-      filters: [{ name: '备份文件', extensions: ['zip'] }],
+      title: t('settings.backup.dialogTitle'),
+      defaultPath: t('settings.backup.fileName', { stamp }),
+      filters: [{ name: t('settings.backup.fileType'), extensions: ['zip'] }],
     })
     if (picked.canceled || !picked.filePath) return
 
@@ -177,9 +179,9 @@ export default function Settings({ open, onClose }) {
       const r = await api.backup(picked.filePath)
       if (r.error) { message.error(r.error); return }
       setLastBackup(r.path)
-      message.success(`备份成功（${(r.size / 1024 / 1024).toFixed(1)} MB）`)
+      message.success(t('settings.backup.ok', { mb: (r.size / 1024 / 1024).toFixed(1) }))
     } catch (e) {
-      message.error('备份失败：' + (e.message || '未知错误'))
+      message.error(t('settings.backup.failed', { msg: e.message || t('err.UNKNOWN') }))
     } finally {
       setBackingUp(false)
     }
@@ -188,34 +190,40 @@ export default function Settings({ open, onClose }) {
   // 从备份包恢复（整体替换）
   const doRestore = async () => {
     const picked = await window.electronAPI.openFileDialog({
-      title: '选择备份文件',
-      filters: [{ name: '备份文件', extensions: ['zip'] }],
+      title: t('settings.restore.dialogTitle'),
+      filters: [{ name: t('settings.backup.fileType'), extensions: ['zip'] }],
       properties: ['openFile'],
     })
     if (picked.canceled || !picked.filePaths?.length) return
     const src = picked.filePaths[0]
 
     Modal.confirm({
-      title: '导入备份？',
+      title: t('settings.restore.confirmTitle'),
       content: (
         <div style={{ fontSize: 12, lineHeight: 1.7 }}>
           <div style={{ marginBottom: 6, wordBreak: 'break-all', color: '#909399' }}>{src}</div>
           <div style={{ color: '#f56c6c', fontWeight: 500 }}>
-            当前所有书籍、笔记、进度、生词和知识图谱将被完全覆盖，且无法恢复。
+            {t('settings.restore.confirmBody')}
           </div>
         </div>
       ),
-      okText: '覆盖并恢复', cancelText: '取消',
+      okText: t('settings.restore.ok'), cancelText: t('common.cancel'),
       okButtonProps: { danger: true },
       onOk: async () => {
         setRestoring(true)
         try {
           const r = await api.restoreBackup(src)
           if (r.error) { message.error(r.error); return }
-          message.success(`恢复成功：${r.book_count} 本书、${r.note_count} 条笔记、${r.bookmark_count} 个书签`)
+          // 三个数量各自可能要复数（英文），所以在各自的量词条目里处理，
+          // 外层只负责把它们拼进整句
+          message.success(t('settings.restore.okMsg', {
+            books: t('unit.book', { count: r.book_count }),
+            notes: t('unit.note', { count: r.note_count }),
+            bookmarks: t('unit.bookmark', { count: r.bookmark_count }),
+          }))
           setTimeout(() => window.location.reload(), 1200)
         } catch (e) {
-          message.error('恢复失败：' + (e.message || '未知错误'))
+          message.error(t('settings.restore.failed', { msg: e.message || t('err.UNKNOWN') }))
         } finally {
           setRestoring(false)
         }
@@ -225,23 +233,23 @@ export default function Settings({ open, onClose }) {
 
   const doReset = () => {
     Modal.confirm({
-      title: '清除所有数据？',
-      content: '将删除所有书籍文件、笔记、阅读进度、生词和知识图谱。AI 引擎配置会保留。此操作不可恢复！',
-      okText: '确定', cancelText: '取消',
+      title: t('settings.reset.title'),
+      content: t('settings.reset.body'),
+      okText: t('common.ok'), cancelText: t('common.cancel'),
       okButtonProps: { danger: true },
       onOk: () => Modal.confirm({
-        title: '再次确认',
-        content: '所有书籍和阅读数据将被永久删除，无法找回！',
-        okText: '确定', cancelText: '取消',
+        title: t('settings.reset.title2'),
+        content: t('settings.reset.body2'),
+        okText: t('common.ok'), cancelText: t('common.cancel'),
         okButtonProps: { danger: true },
-        onOk: async () => { await api.clearAllData(); message.success('已清除'); window.location.reload() }
+        onOk: async () => { await api.clearAllData(); message.success(t('settings.reset.done')); window.location.reload() }
       })
     })
   }
 
   return (
     <Modal
-      title={<span><SettingOutlined style={{ marginRight: 8 }} />设置</span>}
+      title={<span><SettingOutlined style={{ marginRight: 8 }} />{t('settings.title')}</span>}
       open={open} onCancel={onClose} footer={null} width={720} centered
       styles={{ body: { maxHeight: '74vh', overflowY: 'auto', paddingRight: 12 } }}
     >
@@ -261,28 +269,28 @@ export default function Settings({ open, onClose }) {
               options={LANGS.map(l => ({ value: l.value, label: l.label }))} />
           </Form.Item>
 
-          <SectionTitle icon={<ReadOutlined />}>阅读</SectionTitle>
+          <SectionTitle icon={<ReadOutlined />}>{t('settings.section.reading')}</SectionTitle>
 
-          <Form.Item label="护眼模式" tooltip="阅读区与工具面板使用米色纸感配色">
+          <Form.Item label={t('settings.eyeCare.label')} tooltip={t('settings.eyeCare.tooltip')}>
             <Switch checked={eyeCare} onChange={toggleEyeCare} />
           </Form.Item>
 
-          <SectionTitle icon={<SoundOutlined />}>朗读</SectionTitle>
+          <SectionTitle icon={<SoundOutlined />}>{t('settings.section.tts')}</SectionTitle>
 
           {!ttsSupported ? (
             <Form.Item label=" " colon={false}>
-              <span style={{ color: '#e6a23c', fontSize: 12 }}>当前环境不支持语音合成</span>
+              <span style={{ color: '#e6a23c', fontSize: 12 }}>{t('settings.tts.unsupported')}</span>
             </Form.Item>
           ) : (
             <>
               <Form.Item
-                label="语音"
-                tooltip="用的是操作系统已安装的语音，不额外占用安装包体积。中文语音：macOS 有婷婷/美佳，Windows 需在「设置 → 时间和语言 → 语音」里装对应语言包"
+                label={t('settings.tts.voice')}
+                tooltip={t('settings.tts.voice.tooltip')}
               >
                 <Select
                   showSearch allowClear style={FIELD_W}
                   value={ttsPrefs.voiceURI || undefined}
-                  placeholder={`跟随系统（${ttsVoices.length} 个可用）`}
+                  placeholder={t('settings.tts.voice.placeholder', { n: ttsVoices.length })}
                   options={voiceOptions}
                   optionFilterProp="label"
                   onChange={uri => {
@@ -292,7 +300,7 @@ export default function Settings({ open, onClose }) {
                 />
               </Form.Item>
 
-              <Form.Item label="语速" tooltip="1.0 为正常速度">
+              <Form.Item label={t('settings.tts.rate')} tooltip={t('settings.tts.rate.tooltip')}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: FIELD_W }}>
                   <Slider min={0.5} max={2} step={0.1} value={ttsPrefs.rate}
                           onChange={v => updateTts({ rate: v })} style={{ flex: 1, margin: 0 }} />
@@ -303,35 +311,33 @@ export default function Settings({ open, onClose }) {
               {noVoiceHint && (
                 <Form.Item label=" " colon={false}>
                   <span style={{ color: '#e6a23c', fontSize: 12 }}>
-                    系统里没有「{ttsPrefs.lang === 'zh' ? '中文' : ttsPrefs.lang}」语音，朗读会用不了。
-                    macOS 到「系统设置 → 辅助功能 → 朗读内容 → 系统声音」下载；
-                    Windows 到「设置 → 时间和语言 → 语音」添加。
+                    {t('settings.tts.noVoice', { lang: langName(ttsPrefs.lang) })}
                   </span>
                 </Form.Item>
               )}
             </>
           )}
 
-          <SectionTitle icon={<CloudServerOutlined />}>AI 引擎</SectionTitle>
+          <SectionTitle icon={<CloudServerOutlined />}>{t('settings.section.ai')}</SectionTitle>
 
-          <Form.Item label="大模型供应商" tooltip="翻译与知识图谱均通过 OpenAI 兼容 API 调用">
+          <Form.Item label={t('settings.ai.provider')} tooltip={t('settings.ai.provider.tooltip')}>
             <Select value={provider} onChange={handleProviderChange} style={FIELD_W}
               options={PROVIDER_OPTIONS.map(g => ({
-                label: g.group, options: g.items.map(i => ({ value: i.value, label: i.label }))
+                label: t(g.group), options: g.items.map(i => ({ value: i.value, label: t(i.label) }))
               }))} />
           </Form.Item>
 
-          <Form.Item label="接口地址">
+          <Form.Item label={t('settings.ai.base')}>
             <Input value={apiBase} onChange={e => setApiBase(e.target.value)}
               placeholder="https://api.openai.com/v1" style={FIELD_W} />
           </Form.Item>
 
-          <Form.Item label="API Key">
+          <Form.Item label={t('settings.ai.key')}>
             <Input.Password value={apiKey} onChange={e => setApiKey(e.target.value)}
               placeholder="sk-..." style={FIELD_W} />
           </Form.Item>
 
-          <Form.Item label="模型" tooltip="点「获取模型」从接口拉取列表，也可直接手工输入">
+          <Form.Item label={t('settings.ai.model')} tooltip={t('settings.ai.model.tooltip')}>
             <div style={{ display: 'flex', gap: 8, maxWidth: 360 }}>
               <AutoComplete
                 value={model}
@@ -350,47 +356,47 @@ export default function Settings({ open, onClose }) {
                   || option.value.toLowerCase().includes(input.toLowerCase())}
               />
               <Button icon={<ReloadOutlined />} loading={loadingModels} onClick={loadModels}>
-                获取模型
+                {t('settings.ai.getModels')}
               </Button>
             </div>
           </Form.Item>
 
-          <Form.Item label="最大 Token 数" tooltip="单次回复的长度上限，长文翻译建议不低于 4096">
+          <Form.Item label={t('settings.ai.maxTokens')} tooltip={t('settings.ai.maxTokens.tooltip')}>
             <SliderWithValue min={256} max={16384} step={256}
               value={maxTokens} onChange={setMaxTokens} />
           </Form.Item>
 
-          <Form.Item label="温度" tooltip="越低越稳定保守，越高越发散。翻译建议保持 0.3 左右">
+          <Form.Item label={t('settings.ai.temperature')} tooltip={t('settings.ai.temperature.tooltip')}>
             <SliderWithValue min={0} max={1} step={0.1}
               value={temperature} onChange={setTemperature} />
           </Form.Item>
 
           <Form.Item wrapperCol={{ span: WRAPPER_COL.span, offset: LABEL_COL.span }}>
             <Button type="primary" icon={<CloudServerOutlined />} onClick={saveTranslatorConfig}>
-              保存配置
+              {t('settings.ai.save')}
             </Button>
           </Form.Item>
 
-          <SectionTitle icon={<DatabaseOutlined />}>数据管理</SectionTitle>
+          <SectionTitle icon={<DatabaseOutlined />}>{t('settings.section.data')}</SectionTitle>
 
-          <Form.Item label="备份" tooltip="打包书籍、笔记、进度、生词、知识图谱和 AI 引擎配置">
+          <Form.Item label={t('settings.backup.label')} tooltip={t('settings.backup.tooltip')}>
             <Space>
-              <Button loading={backingUp} onClick={doBackup}>导出备份</Button>
+              <Button loading={backingUp} onClick={doBackup}>{t('settings.backup.export')}</Button>
               {lastBackup && (
                 <Button type="link" icon={<FolderOpenOutlined />}
                   onClick={() => window.electronAPI.showInFolder(lastBackup)}>
-                  打开所在文件夹
+                  {t('settings.backup.openFolder')}
                 </Button>
               )}
             </Space>
           </Form.Item>
 
-          <Form.Item label="恢复" tooltip="从备份文件恢复，会覆盖当前全部数据">
-            <Button loading={restoring} onClick={doRestore}>导入备份</Button>
+          <Form.Item label={t('settings.restore.label')} tooltip={t('settings.restore.tooltip')}>
+            <Button loading={restoring} onClick={doRestore}>{t('settings.restore.import')}</Button>
           </Form.Item>
 
-          <Form.Item label="清除" tooltip="删除所有书籍、笔记、进度、生词和知识图谱，保留 AI 引擎配置">
-            <Button danger onClick={doReset}>清除所有数据</Button>
+          <Form.Item label={t('settings.reset.label')} tooltip={t('settings.reset.tooltip')}>
+            <Button danger onClick={doReset}>{t('settings.reset.button')}</Button>
           </Form.Item>
         </Form>
       )}
