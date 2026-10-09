@@ -15,6 +15,22 @@ from collections import Counter
 # 否则从旧备份恢复回来的旧缓存会一直以旧格式被读出来。
 PARSER_VERSION = 3
 
+
+class ParseError(ValueError):
+    """
+    解析失败。
+
+    code 给前端翻成当前界面语言，中文的 message 是兜底 —— 后端日志、
+    以及前端遇到不认识的 code 时靠它。params 里的值会插进前端文案。
+
+    路由层统一 catch 后用它的 code 出响应，见 routes/books.py。
+    """
+
+    def __init__(self, code, message, **params):
+        super().__init__(message)
+        self.code = code
+        self.params = params
+
 # 块级元素：文本类格式按块产出「行」，模拟分页时按行数切
 _BLOCK_TAGS = {
     'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'pre',
@@ -51,7 +67,7 @@ class DocumentParser:
         elif ext in ('.html', '.htm', '.xhtml'):
             return self._parse_html(file_path)
         else:
-            raise ValueError(f"不支持的文件格式: {ext}")
+            raise ParseError("PARSE_UNSUPPORTED", f"不支持的文件格式: {ext}", ext=ext)
 
     # 小于此字号的文本一律视为隐形。正常正文在 9~12pt，
     # 而这个阈值只用来挡那些 0.0x pt 的隐形锚点，不会误伤小字注释。
@@ -450,7 +466,7 @@ class DocumentParser:
                 continue
             except LookupError:
                 continue
-        raise ValueError("无法识别文件编码")
+        raise ParseError("PARSE_ENCODING", "无法识别文件编码")
 
     def _build_text_result(self, file_path, lines, chapters, title=None, author='未知'):
         """文本类格式的公共出口：与 _parse_docx 输出同一套结构"""
@@ -540,13 +556,13 @@ class DocumentParser:
         try:
             from lxml import html as lxml_html
         except ImportError:
-            raise ValueError("解析 HTML 需要 lxml，请先安装后端依赖")
+            raise ParseError("PARSE_HTML_DEP", "解析 HTML 需要 lxml，请先安装后端依赖")
 
         raw = self._read_text_file(file_path)
         try:
             root = lxml_html.fromstring(raw)
         except Exception as e:
-            raise ValueError(f"HTML 解析失败: {e}")
+            raise ParseError("PARSE_HTML_FAILED", f"HTML 解析失败: {e}", msg=str(e))
 
         # <title> 当书名
         title = None
@@ -583,7 +599,7 @@ class DocumentParser:
             lines.append(text)
 
         if not lines:
-            raise ValueError("该 HTML 文件没有可提取的正文")
+            raise ParseError("PARSE_HTML_EMPTY", "该 HTML 文件没有可提取的正文")
 
         return self._build_text_result(file_path, lines, chapters, title=title)
 

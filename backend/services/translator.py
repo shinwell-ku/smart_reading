@@ -10,8 +10,13 @@ Rules:
 - Preserve the original formatting (paragraphs, line breaks).
 - If the text is already in {target_lang}, return it as-is."""
 
-# 未配置 AI 引擎时的统一提示
-NOT_CONFIGURED_MSG = "尚未配置 AI 引擎，请在「设置 → AI 引擎」中填写接口地址和 API Key"
+# 未配置 AI 引擎时的统一提示。
+# code 给前端翻成当前界面语言，error 是中文兜底 —— 后端日志、以及前端
+# 遇到不认识的 code 时都靠它，不会露出 err.XXX 这种半成品。
+NOT_CONFIGURED_ERR = {
+    "code": "NOT_CONFIGURED",
+    "error": "尚未配置 AI 引擎，请在「设置 → AI 引擎」中填写接口地址和 API Key",
+}
 
 
 class TranslatorService:
@@ -113,14 +118,15 @@ class TranslatorService:
     def _translate_remote(self, text, source_lang, target_lang):
         """
         通过远程 LLM API 翻译
-        返回 (译文, 错误信息)，二者必有其一为 None
+        返回 (译文, 错误字典)，二者必有其一为 None。
+        错误字典形如 {"code", "error", "params"}，见 NOT_CONFIGURED_ERR 的说明。
         """
         cfg = self._config.remote
 
         try:
             import openai
         except ImportError:
-            return None, "缺少 openai 依赖，请重新安装后端依赖"
+            return None, {"code": "NO_OPENAI", "error": "缺少 openai 依赖，请重新安装后端依赖"}
 
         try:
             client = openai.OpenAI(
@@ -144,20 +150,24 @@ class TranslatorService:
             )
             translated = (resp.choices[0].message.content or '').strip()
             if not translated:
-                return None, "AI 返回了空结果，请检查模型名是否正确"
+                return None, {"code": "EMPTY_RESULT", "error": "AI 返回了空结果，请检查模型名是否正确"}
             return translated, None
         except openai.AuthenticationError:
-            return None, "API Key 无效或已过期，请在设置中检查"
+            return None, {"code": "AUTH_FAILED", "error": "API Key 无效或已过期，请在设置中检查"}
         except openai.APIConnectionError:
-            return None, f"无法连接到 {cfg.api_base}，请检查接口地址和网络"
+            return None, {"code": "CONNECT_FAILED", "params": {"base": cfg.api_base},
+                          "error": f"无法连接到 {cfg.api_base}，请检查接口地址和网络"}
         except openai.NotFoundError:
-            return None, f"模型「{cfg.model}」不存在或无权访问，请重新选择模型"
+            return None, {"code": "MODEL_NOT_FOUND", "params": {"model": cfg.model},
+                          "error": f"模型「{cfg.model}」不存在或无权访问，请重新选择模型"}
         except openai.RateLimitError:
-            return None, "请求过于频繁或账户额度不足"
+            return None, {"code": "RATE_LIMITED", "error": "请求过于频繁或账户额度不足"}
         except openai.APIStatusError as e:
-            return None, f"AI 服务返回错误（HTTP {e.status_code}）：{e.message}"
+            return None, {"code": "API_STATUS", "params": {"status": e.status_code, "msg": e.message},
+                          "error": f"AI 服务返回错误（HTTP {e.status_code}）：{e.message}"}
         except Exception as e:
-            return None, f"翻译请求失败：{e}"
+            return None, {"code": "TRANSLATE_FAILED", "params": {"msg": str(e)},
+                          "error": f"翻译请求失败：{e}"}
 
     def _reload_config(self):
         """重新加载配置（支持设置页面热切换）"""
@@ -184,11 +194,11 @@ class TranslatorService:
             return {"translated_text": text, "detected_lang": source_lang}
 
         if not self.is_configured(reload=False):
-            return {"translated_text": "", "detected_lang": source_lang, "error": NOT_CONFIGURED_MSG}
+            return {"translated_text": "", "detected_lang": source_lang, **NOT_CONFIGURED_ERR}
 
-        translated, error = self._translate_remote(text, source_lang, target_lang)
-        if error:
-            return {"translated_text": "", "detected_lang": source_lang, "error": error}
+        translated, err = self._translate_remote(text, source_lang, target_lang)
+        if err:
+            return {"translated_text": "", "detected_lang": source_lang, **err}
 
         return {"translated_text": translated, "detected_lang": source_lang}
 
@@ -205,7 +215,7 @@ class TranslatorService:
         if not self.is_configured():
             return {
                 "segments": [], "full_translation": "",
-                "total_segments": 0, "error": NOT_CONFIGURED_MSG,
+                "total_segments": 0, **NOT_CONFIGURED_ERR,
             }
 
         # 检测源语言
@@ -232,9 +242,11 @@ class TranslatorService:
         for i, chunk in enumerate(chunks):
             result = self.translate(chunk, source_lang, target_lang)
             if result.get("error"):
+                # 把分块失败的原因（含 code）原样上抛，前端才能翻成当前语言
+                err = {k: result[k] for k in ("code", "params") if k in result}
                 return {
                     "segments": translated_segments, "full_translation": "",
-                    "total_segments": 0, "error": result["error"],
+                    "total_segments": 0, "error": result["error"], **err,
                 }
             translated_segments.append({
                 "index": i,

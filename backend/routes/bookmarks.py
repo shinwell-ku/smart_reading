@@ -49,7 +49,7 @@ def update_bookmark(bookmark_id):
     db = get_db()
     bm = db.query(Bookmark).get(bookmark_id)
     if not bm:
-        return jsonify({"error": "书签不存在"}), 404
+        return jsonify({"error": "书签不存在", "code": "BOOKMARK_NOT_FOUND"}), 404
     if 'title' in data:
         bm.title = data['title']
     if 'page_num' in data:

@@ -53,20 +53,21 @@ def list_models():
     api_key = (data.get('api_key') or cfg.api_key or '').strip()
 
     if not api_base:
-        return jsonify({"error": "请先填写接口地址"}), 400
+        return jsonify({"error": "请先填写接口地址", "code": "NEED_BASE"}), 400
     if not api_key:
-        return jsonify({"error": "请先填写 API Key"}), 400
+        return jsonify({"error": "请先填写 API Key", "code": "NEED_KEY"}), 400
 
     try:
         from openai import OpenAI
     except ImportError:
-        return jsonify({"error": "缺少 openai 依赖，请重新安装后端依赖"}), 500
+        return jsonify({"error": "缺少 openai 依赖，请重新安装后端依赖", "code": "NO_OPENAI"}), 500
 
     try:
         client = OpenAI(base_url=api_base, api_key=api_key, timeout=15)
         models = sorted(m.id for m in client.models.list().data if getattr(m, 'id', None))
         if not models:
-            return jsonify({"error": "该接口未返回任何模型"}), 502
+            return jsonify({"error": "该接口未返回任何模型", "code": "NO_MODELS"}), 502
         return jsonify({"models": models})
     except Exception as e:
-        return jsonify({"error": f"获取模型列表失败：{e}"}), 502
+        return jsonify({"error": f"获取模型列表失败：{e}", "code": "MODEL_LIST_FAILED",
+                     "params": {"msg": str(e)}}), 502

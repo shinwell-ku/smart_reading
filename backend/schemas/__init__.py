@@ -121,7 +121,9 @@ class BookmarkListResponse(BaseModel):
 # ============================================================
 
 class TranslateRequest(BaseModel):
-    text: str = Field(..., min_length=1)
+    # 不写 min_length：空串由路由判（那边能给出「翻译文本不能为空」这句具体
+    # 文案），这里拦下来只会变成一句笼统的参数校验错误
+    text: str = Field(...)
     source_lang: str = 'auto'
     target_lang: str = 'zh'
     book_id: Optional[int] = None
@@ -132,6 +134,10 @@ class TranslateResponse(BaseModel):
     source_lang: str
     target_lang: str
     error: Optional[str] = None
+    # code / params 一路从 TranslatorService 带上来，前端按 code 翻成当前界面
+    # 语言（见 i18n 的 errText）。漏掉这两个字段，英文界面就会冒出中文错误。
+    code: Optional[str] = None
+    params: Optional[dict] = None
 
 
 class FullTranslateRequest(BaseModel):

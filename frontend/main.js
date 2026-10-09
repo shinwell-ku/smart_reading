@@ -230,7 +230,10 @@ function createMainWindow() {
     height: 900,
     minWidth: 1000,
     minHeight: 700,
-    title: 'AI智慧阅读',
+    // 只是个初始值：页面加载后会被 index.html 的 <title> 覆盖（i18n 那层
+    // 按当前语言改写它）。这里用产品英文名，纯粹为了不让英文用户
+    // 在启动那一瞬间看见中文。
+    title: 'SmartReading',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -263,6 +266,9 @@ function createMainWindow() {
 // ============================================================
 
 // 文件对话框 - 选择导入书籍
+// 下面这些中文只是兜底 —— `...options` 在后面，调用方传了就以调用方为准。
+// 三个调用点（Library 导入、Settings 备份/恢复）都传了 i18n 出来的标题，
+// 所以正常路径下这里不会露出来。新增调用方时记得也传。
 ipcMain.handle('dialog:openFile', async (event, options) => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '导入文档',

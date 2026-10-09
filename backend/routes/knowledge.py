@@ -24,22 +24,11 @@ _running_tasks_lock = threading.Lock()
 _task_progress = {}
 
 # stage → 中文说明（写在这里，前端直接显示，避免两边文案各写一份）
-STAGE_TEXT = {
-    "indexing": "正在读取文本...",
-    "chunking": "正在分块...",
-    "outline": "正在提取章节大纲...",
-    "rules": "正在抽取概念与关系...",
-    "llm": "正在调用 AI 分析...",
-    "building": "正在构建图谱...",
-    "saving": "正在保存...",
-}
-
-
 @knowledge_bp.route('/extract/<int:book_id>', methods=['POST'])
 def extract_knowledge(book_id):
     text_path = os.path.join(CACHE_DIR, f'book_{book_id}_text.txt')
     if not os.path.exists(text_path):
-        return jsonify({"error": "书籍文本不存在，请先解析"}), 400
+        return jsonify({"error": "书籍文本不存在，请先解析", "code": "TEXT_NOT_FOUND"}), 400
 
     # 防止同一本书重复触发
     with _running_tasks_lock:
@@ -141,8 +130,9 @@ def get_extract_progress(book_id):
 
     return jsonify({
         "running": True,
+        # 只回 stage 这个稳定的枚举值，文案由前端按界面语言自己出
+        # （见 frontend/src/i18n 的 side.kg.stage.*），避免同一句话两处维护
         "stage": p.get("stage", ""),
-        "message": STAGE_TEXT.get(p.get("stage", ""), "处理中..."),
         "current": current,
         "total": total,
         "percent": percent,
@@ -223,7 +213,7 @@ def export_knowledge(book_id):
     db = get_db()
     book = db.query(Book).get(book_id)
     if not book:
-        return jsonify({"error": "书籍不存在"}), 404
+        return jsonify({"error": "书籍不存在", "code": "BOOK_NOT_FOUND"}), 404
 
     if fmt == 'txt':
         nodes = db.query(KnowledgeNode).filter_by(book_id=book_id).order_by(
@@ -245,4 +235,4 @@ def export_knowledge(book_id):
         if os.path.exists(knowledge_path):
             return send_file(knowledge_path, as_attachment=True, download_name=f'{book.title}_知识图谱.json')
 
-    return jsonify({"error": "不支持的导出格式"}), 400
+    return jsonify({"error": "不支持的导出格式", "code": "UNSUPPORTED_EXPORT"}), 400

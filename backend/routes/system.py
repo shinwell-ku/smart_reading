@@ -70,7 +70,8 @@ def create_backup():
 
     dest_dir = os.path.dirname(os.path.abspath(dest_path))
     if not os.path.isdir(dest_dir):
-        return jsonify({"error": f"目标目录不存在：{dest_dir}"}), 400
+        return jsonify({"error": f"目标目录不存在：{dest_dir}", "code": "DEST_NOT_FOUND",
+                     "params": {"path": dest_dir}}), 400
 
     stage_dir = os.path.join(EXPORTS_DIR, f'_backup_{timestamp}')
     os.makedirs(stage_dir, exist_ok=True)
@@ -118,7 +119,8 @@ def create_backup():
             message="备份成功", path=dest_path, size=size,
         ).model_dump())
     except Exception as e:
-        return jsonify({"error": f"备份失败：{e}"}), 500
+        return jsonify({"error": f"备份失败：{e}", "code": "BACKUP_FAILED",
+                     "params": {"msg": str(e)}}), 500
     finally:
         shutil.rmtree(stage_dir, ignore_errors=True)
         # 清掉可能残留的 .part 产物
@@ -155,11 +157,13 @@ def restore_backup():
     src_path = (data.get('path') or '').strip()
 
     if not src_path:
-        return jsonify({"error": "未指定备份文件"}), 400
+        return jsonify({"error": "未指定备份文件", "code": "NO_BACKUP_FILE"}), 400
     if not os.path.exists(src_path):
-        return jsonify({"error": f"备份文件不存在：{src_path}"}), 400
+        return jsonify({"error": f"备份文件不存在：{src_path}", "code": "BACKUP_NOT_FOUND",
+                     "params": {"path": src_path}}), 400
     if not zipfile.is_zipfile(src_path):
-        return jsonify({"error": "该文件不是有效的备份包（不是 zip 格式）"}), 400
+        return jsonify({"error": "该文件不是有效的备份包（不是 zip 格式）",
+                     "code": "BACKUP_NOT_ZIP"}), 400
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     stage_dir = os.path.join(EXPORTS_DIR, f'_restore_{timestamp}')
@@ -170,19 +174,22 @@ def restore_backup():
         with zipfile.ZipFile(src_path, 'r') as zf:
             bad = _safe_extract(zf, stage_dir)
             if bad:
-                return jsonify({"error": f"备份包包含非法路径，已中止：{bad}"}), 400
+                return jsonify({"error": f"备份包包含非法路径，已中止：{bad}",
+                     "code": "BACKUP_BAD_PATH", "params": {"path": bad}}), 400
 
         manifest_path = os.path.join(stage_dir, 'manifest.json')
         if not os.path.exists(manifest_path):
-            return jsonify({"error": "该压缩包不是本软件的备份（缺少 manifest.json）"}), 400
+            return jsonify({"error": "该压缩包不是本软件的备份（缺少 manifest.json）",
+                     "code": "BACKUP_NO_MANIFEST"}), 400
         with open(manifest_path, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
         if manifest.get('format') != BACKUP_FORMAT:
-            return jsonify({"error": "该压缩包不是本软件的备份（格式标识不匹配）"}), 400
+            return jsonify({"error": "该压缩包不是本软件的备份（格式标识不匹配）",
+                     "code": "BACKUP_BAD_FORMAT"}), 400
 
         src_db = os.path.join(stage_dir, 'database.db')
         if not os.path.exists(src_db):
-            return jsonify({"error": "备份包损坏：缺少数据库文件"}), 400
+            return jsonify({"error": "备份包损坏：缺少数据库文件", "code": "BACKUP_NO_DB"}), 400
 
         # 2. 断掉所有连接，否则旧连接句柄仍指向被替换掉的旧 inode
         reset_engine()
@@ -248,7 +255,8 @@ def restore_backup():
             **counts,
         ).model_dump())
     except Exception as e:
-        return jsonify({"error": f"恢复失败：{e}"}), 500
+        return jsonify({"error": f"恢复失败：{e}", "code": "RESTORE_FAILED",
+                     "params": {"msg": str(e)}}), 500
     finally:
         shutil.rmtree(stage_dir, ignore_errors=True)
 

@@ -16,11 +16,11 @@ search_bp = Blueprint('search', __name__, url_prefix='/api/search')
 def search_book(book_id):
     keyword = request.args.get('q', '')
     if not keyword:
-        return jsonify({"error": "搜索关键词不能为空"}), 400
+        return jsonify({"error": "搜索关键词不能为空", "code": "EMPTY_KEYWORD"}), 400
 
     text_path = os.path.join(CACHE_DIR, f'book_{book_id}_text.txt')
     if not os.path.exists(text_path):
-        return jsonify({"error": "书籍文本未找到"}), 400
+        return jsonify({"error": "书籍文本未找到", "code": "TEXT_NOT_FOUND"}), 400
 
     with open(text_path, 'r', encoding='utf-8') as f:
         text = f.read()

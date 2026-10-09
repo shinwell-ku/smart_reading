@@ -9,6 +9,7 @@ from core.database import get_db
 from core.config import BOOKS_DIR, CACHE_DIR
 from core.config import get_doc_parser
 from services import page_cache
+from services.document_parser import ParseError
 from models import Book
 from schemas import BookResponse, BookListResponse, BookImportResult, MessageResponse
 
@@ -73,7 +74,8 @@ def import_book():
 
     file_type = _detect_file_type(file.filename)
     if not file_type:
-        return jsonify({"error": f"仅支持 {SUPPORTED_EXTS_TEXT} 格式", "code": "UNSUPPORTED_FORMAT"}), 400
+        return jsonify({"error": f"仅支持 {SUPPORTED_EXTS_TEXT} 格式", "code": "UNSUPPORTED_FORMAT",
+                     "params": {"exts": SUPPORTED_EXTS_TEXT}}), 400
 
     book_path = os.path.join(BOOKS_DIR, file.filename)
     file.save(book_path)
@@ -125,10 +127,17 @@ def import_book():
         )
         return jsonify(resp.model_dump())
 
+    except ParseError as e:
+        # 解析器抛的异常自带错误码，前端能翻成当前语言；
+        # 其它异常只能给 PARSE_ERROR，前端显示下面这句中文原文。
+        if os.path.exists(book_path):
+            os.remove(book_path)
+        return jsonify({"error": str(e), "code": e.code, "params": e.params}), 500
     except Exception as e:
         if os.path.exists(book_path):
             os.remove(book_path)
-        return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR"}), 500
+        return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR",
+                     "params": {"msg": str(e)}}), 500
 
 
 @books_bp.route('/import_by_path', methods=['POST'])
@@ -142,7 +151,8 @@ def import_book_by_path():
     filename = os.path.basename(src_path).lower()
     file_type = _detect_file_type(filename)
     if not file_type:
-        return jsonify({"error": f"仅支持 {SUPPORTED_EXTS_TEXT} 格式", "code": "UNSUPPORTED_FORMAT"}), 400
+        return jsonify({"error": f"仅支持 {SUPPORTED_EXTS_TEXT} 格式", "code": "UNSUPPORTED_FORMAT",
+                     "params": {"exts": SUPPORTED_EXTS_TEXT}}), 400
 
     # 同名文档：默认不重复导入，回一个可识别的信号让前端去问用户；
     # 用户确认后带 allow_duplicate 再来一次。
@@ -153,6 +163,7 @@ def import_book_by_path():
             return jsonify({
                 "error": f"书库中已有同名文档《{dup.title}》",
                 "code": "DUPLICATE_NAME",
+                "params": {"title": dup.title},
                 "existing_id": dup.id,
                 "existing_title": dup.title,
             }), 409
@@ -213,10 +224,17 @@ def import_book_by_path():
             is_scan_pdf=bool(book.is_scan_pdf),
         ).model_dump())
 
+    except ParseError as e:
+        # 解析器抛的异常自带错误码，前端能翻成当前语言；
+        # 其它异常只能给 PARSE_ERROR，前端显示下面这句中文原文。
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        return jsonify({"error": str(e), "code": e.code, "params": e.params}), 500
     except Exception as e:
         if os.path.exists(dest_path):
             os.remove(dest_path)
-        return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR"}), 500
+        return jsonify({"error": f"解析失败: {str(e)}", "code": "PARSE_ERROR",
+                     "params": {"msg": str(e)}}), 500
 
 
 @books_bp.route('/order', methods=['PUT'])
@@ -250,7 +268,7 @@ def get_book_file(book_id):
     db = get_db()
     book = db.query(Book).get(book_id)
     if not book or not os.path.exists(book.file_path):
-        return jsonify({"error": "文件不存在"}), 404
+        return jsonify({"error": "文件不存在", "code": "FILE_NOT_FOUND"}), 404
     return send_file(book.file_path, mimetype='application/pdf')
 
 
@@ -298,7 +316,7 @@ def delete_book(book_id):
     db = get_db()
     book = db.query(Book).get(book_id)
     if not book:
-        return jsonify({"error": "书籍不存在"}), 404
+        return jsonify({"error": "书籍不存在", "code": "NOT_FOUND"}), 404
 
     if os.path.exists(book.file_path):
         os.remove(book.file_path)
@@ -322,7 +340,7 @@ def get_book_full_text(book_id):
 
     text_path = page_cache.text_path(book_id)
     if not os.path.exists(text_path):
-        return jsonify({"error": "全文不存在"}), 404
+        return jsonify({"error": "全文不存在", "code": "TEXT_NOT_FOUND"}), 404
     return send_file(text_path, mimetype='text/plain; charset=utf-8')
 
 
@@ -332,10 +350,10 @@ def get_page_content(book_id, page_num):
     pages = page_cache.load(book) if book else page_cache.read(book_id)[0]
 
     if not pages:
-        return jsonify({"error": "页面数据不存在"}), 404
+        return jsonify({"error": "页面数据不存在", "code": "PAGES_NOT_FOUND"}), 404
 
     if page_num < 1 or page_num > len(pages):
-        return jsonify({"error": "页码超出范围"}), 400
+        return jsonify({"error": "页码超出范围", "code": "PAGE_OUT_OF_RANGE"}), 400
 
     return jsonify({"page_num": page_num, "total_pages": len(pages), "content": pages[page_num - 1]})
 

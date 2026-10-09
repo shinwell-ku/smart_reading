@@ -50,7 +50,9 @@ function applyToDocument(lang) {
 }
 applyToDocument(current)
 
-const has = key => DICTS[current][key] !== undefined
+// 「能不能翻译出来」。和 t() 一样要考虑英文表缺条目退回中文表的兜底，
+// 否则 en.js 漏一条就会静默退回后端中文原文 —— 那正是最该被发现的漏翻。
+const has = key => DICTS[current][key] !== undefined || DICTS.zh[key] !== undefined
 
 /**
  * 取文案。
@@ -76,6 +78,29 @@ export function t(key, params, fallback) {
   // 参数缺失时保留 {k} 原样 —— 比静默变成空字符串容易发现问题
   if (params) s = s.replace(/\{(\w+)\}/g, (m, k) => (params[k] ?? m))
   return s
+}
+
+/**
+ * 跟 t() 一样取词，但允许参数是 React 节点 —— 返回一个可以直接塞进 JSX
+ * 的数组。只用在确实需要把数字加粗的长句上（知识图谱的生成确认框），
+ * 别的地方一律用 t()。
+ *
+ * 注意词典里的模板**不能**写 <b> 标签：那会被当成纯文本渲染出来。
+ * 要加粗的部分由调用方作为参数传进来。
+ */
+export function tJsx(key, params) {
+  const s = typeof DICTS[current][key] === 'string' ? DICTS[current][key] : DICTS.zh[key]
+  if (!s) return null
+  const out = []
+  const re = /\{(\w+)\}/g
+  let last = 0, m
+  while ((m = re.exec(s))) {
+    if (m.index > last) out.push(s.slice(last, m.index))
+    out.push(params?.[m[1]] ?? m[0])
+    last = m.index + m[0].length
+  }
+  if (last < s.length) out.push(s.slice(last))
+  return out
 }
 
 /** 语言代码 → 显示名。字典里没有的代码原样返回（系统可能装着别的语音） */

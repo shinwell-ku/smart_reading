@@ -4,7 +4,7 @@ import { Select, Button, Input, message, notification, Modal, Tooltip, Progress,
 import { DeleteOutlined, ZoomInOutlined, ZoomOutOutlined, SoundOutlined, PauseCircleOutlined, PlayCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { useSpeech, useTtsPrefs, resolveVoice, isSupported as ttsSupported } from '../useSpeech'
 import { SIDE_TABS } from '../sideTabs'
-import { useI18n } from '../i18n'
+import { useI18n, t as tGlobal, tJsx, getLang } from '../i18n'
 
 function cleanText(text) {
   if (!text) return ''
@@ -30,17 +30,26 @@ function cleanText(text) {
   return t
 }
 
-// 秒数 → 人类可读时长
+// 秒数 → 人类可读时长。这个函数在组件外，拿不到 hook 里的 t，
+// 所以用模块级的 tGlobal（它读的就是当前语言）。
 function fmtDuration(sec) {
   if (sec == null) return ''
-  if (sec < 60) return `${sec} 秒`
+  if (sec < 60) return tGlobal('common.durSec', { n: sec })
   const m = Math.floor(sec / 60)
   const s = sec % 60
-  return s ? `${m} 分 ${s} 秒` : `${m} 分钟`
+  return s ? tGlobal('common.durMinSec', { m, s }) : tGlobal('common.durMin', { m })
+}
+
+// 书的长度的单位中英不同：中文按「万字」（÷1e4），英文按 k characters
+// （÷1e3）—— 差一个数量级，不能共用同一个参数值
+function fmtLength(chars) {
+  return getLang() === 'zh'
+    ? `${(chars / 10000).toFixed(1)} 万字`
+    : `${Math.round(chars / 1000)}k characters`
 }
 
 export default function SidePanel({ book, page, activeTab, onTabChange }) {
-  const { t } = useI18n()
+  const { t, langName } = useI18n()
   const [sourceText, setSourceText] = useState('')
   const [resultText, setResultText] = useState('')
   const [translateError, setTranslateError] = useState('')
@@ -82,14 +91,14 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const toggleSpeak = () => {
     if (speech.state === 'playing') return speech.pause()
     if (speech.state === 'paused') return speech.resume()
-    if (!ttsSupported) { message.warning('当前环境不支持语音合成'); return }
+    if (!ttsSupported) { message.warning(t('common.ttsUnsupported')); return }
     const text = sourceText.trim()
-    if (!text) { message.info('请先输入或选中要朗读的文本'); return }
+    if (!text) { message.info(t('side.tts.needText')); return }
     if (!ttsVoice) {
       // 不静默降级：宁可不出声，也不能拿英文声音念中文
       notification.warning({
-        message: '系统里没有可用的语音',
-        description: `找不到「${ttsPrefs.lang === 'zh' ? '中文' : ttsPrefs.lang}」语音。可以到「设置 → AI 引擎」下方的朗读区换一个，或在系统里装上对应语言包。`,
+        message: t('common.noVoice'),
+        description: t('side.tts.noVoiceDesc', { lang: langName(ttsPrefs.lang) }),
         duration: 8,
       })
       return
@@ -137,9 +146,9 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
 
   const translate = async () => {
     const text = sourceText.trim()
-    if (!text) { message.info('请输入文本'); return }
+    if (!text) { message.info(t('side.translate.needText')); return }
     setTranslating(true)
-    setResultText('⏳ 翻译中...')
+    setResultText(t('side.translate.inProgress'))
     setTranslateError('')
     try {
       const r = await api.translate({ text: text, source_lang: sourceLang, target_lang: targetLang })
@@ -152,7 +161,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         }).catch(() => {})
       }
     } catch (e) {
-      setTranslateError(e.message || '网络错误'); setResultText('')
+      setTranslateError(e.message || t('err.NETWORK')); setResultText('')
     } finally {
       // 必须放在 finally：「未配置 AI 引擎」「接口返回错误」这两条路都是
       // return 出去的，写在 try 后面根本执行不到，按钮会一直转圈。
@@ -171,7 +180,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const addNote = async () => {
     if (!book || !noteText.trim()) return
     await api.addNote(book.id, { page_num: page, content: noteText, color: noteColor })
-    message.success('笔记已添加')
+    message.success(t('side.notes.added'))
     setNoteText('')
     const r = await api.getNotes(book.id)
     setNotes(r.notes || [])
@@ -190,7 +199,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       if (data.nodes && data.nodes.length) {
         setExtracting(false); setProgress(null)
         setGraphExists(true); setGraphData(data)
-        notification.info({ message: '知识图谱', description: '知识抽取已完成', placement: 'bottomRight', duration: 6 })
+        notification.info({ message: t('side.tab.knowledge'), description: t('side.kg.extracted'), placement: 'bottomRight', duration: 6 })
         loadGraph(bid)
         return true
       }
@@ -221,38 +230,40 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
 
     const ok = await new Promise(resolve => {
       Modal.confirm({
-        title: '开始生成知识图谱？',
+        title: t('side.kg.confirmTitle'),
         width: 460,
         content: llm ? (
           <div style={{ fontSize: 12, lineHeight: 1.9 }}>
             <div>
-              本书约 <b>{(chars / 10000).toFixed(1)} 万字</b>，将拆成约 <b>{chunks}</b> 段逐段调用 AI 分析。
+              {/* 加粗的部分由 tJsx 的参数带进来 —— 词典里不能写 <b>，
+                  那会被当纯文本渲染出来。长度单位也在这里算：中文按
+                  万字、英文按 k characters，差一个数量级 */}
+              {tJsx('side.kg.ai.intro', { len: <b>{fmtLength(chars)}</b>, chunks: <b>{chunks}</b> })}
             </div>
             <ul style={{ margin: '8px 0 0 18px', padding: 0, color: '#606266' }}>
-              <li>预计耗时 <b>{lo}–{hi} 分钟</b>，是逐段串行的，中途不会更快</li>
-              <li>会产生约 <b>{chunks} 次 API 调用</b>，计入你的 token 消耗</li>
-              <li>生成期间请勿关闭应用；下方会显示进度和预计剩余时间</li>
+              <li>{tJsx('side.kg.ai.time', { time: <b>{t('common.durRange', { lo, hi })}</b> })}</li>
+              <li>{tJsx('side.kg.ai.calls', { chunks: <b>{chunks}</b> })}</li>
+              <li>{t('side.kg.ai.keepOpen')}</li>
             </ul>
             <div style={{ marginTop: 8, color: '#909399' }}>
-              嫌慢或想省钱，可以在设置里换成更快的模型。
+              {t('side.kg.ai.tip')}
             </div>
           </div>
         ) : (
           <div style={{ fontSize: 12, lineHeight: 1.9 }}>
             <div>
-              本书约 <b>{(chars / 10000).toFixed(1)} 万字</b>，将使用<b>内置规则</b>抽取。
+              {tJsx('side.kg.rule.intro', { len: <b>{fmtLength(chars)}</b> })}
             </div>
             <ul style={{ margin: '8px 0 0 18px', padding: 0, color: '#606266' }}>
-              <li>速度快，通常几秒到几十秒完成</li>
-              <li>不调用 AI，<b>不消耗 token</b></li>
+              <li>{t('side.kg.rule.fast')}</li>
+              <li>{t('side.kg.rule.free')}</li>
             </ul>
             <div style={{ marginTop: 8, color: '#fa8c16' }}>
-              未配置 AI 引擎，抽取的实体和关系质量会明显低于 AI 模式。
-              可在「设置 → AI 引擎」中配置后重新生成。
+              {t('side.kg.rule.warn')} {t('side.kg.rule.tip')}
             </div>
           </div>
         ),
-        okText: '开始生成', cancelText: '取消',
+        okText: t('side.kg.confirmOk'), cancelText: t('common.cancel'),
         onOk: () => resolve(true),
         onCancel: () => resolve(false),
       })
@@ -281,7 +292,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       if (p && p.error) {
         clearInterval(timer)
         setExtracting(false); setProgress(null)
-        message.error('知识抽取失败：' + p.error)
+        message.error(t('side.kg.extractFailed', { msg: p.error }))
         return
       }
       if (await finishIfGraphReady(bid)) { clearInterval(timer); return }
@@ -292,7 +303,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       if (++missCount >= 3) {
         clearInterval(timer)
         setExtracting(false); setProgress(null)
-        message.warning('抽取任务已中断（后端可能重启过），请重新生成')
+        message.warning(t('side.kg.interrupted'))
       }
     }, 1000)
 
@@ -417,17 +428,23 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
 
   // Language options
   const langOpts = [
-    { value: 'auto', label: '自动检测' }, { value: 'zh', label: '中文' },
-    { value: 'en', label: 'English (英语)' }, { value: 'ja', label: '日本語 (日语)' },
-    { value: 'ko', label: '한국어 (韩语)' }, { value: 'fr', label: 'Français (法语)' },
-    { value: 'de', label: 'Deutsch (德语)' }, { value: 'es', label: 'Español (西班牙语)' },
-    { value: 'ru', label: 'Русский (俄语)' }, { value: 'pt', label: 'Português (葡萄牙语)' },
-    { value: 'it', label: 'Italiano (意大利语)' }, { value: 'nl', label: 'Nederlands (荷兰语)' },
-    { value: 'pl', label: 'Polski (波兰语)' }, { value: 'tr', label: 'Türkçe (土耳其语)' },
-    { value: 'vi', label: 'Tiếng Việt (越南语)' }, { value: 'th', label: 'ไทย (泰语)' },
-    { value: 'ar', label: 'العربية (阿拉伯语)' }, { value: 'hi', label: 'हिन्दी (印地语)' },
-    { value: 'mn', label: 'Монгол (蒙古语)' },
-  ]
+    { value: 'auto', key: 'lang.auto' }, { value: 'zh', native: '中文', key: 'lang.zh' },
+    { value: 'en', native: 'English', key: 'lang.en' }, { value: 'ja', native: '日本語', key: 'lang.ja' },
+    { value: 'ko', native: '한국어', key: 'lang.ko' }, { value: 'fr', native: 'Français', key: 'lang.fr' },
+    { value: 'de', native: 'Deutsch', key: 'lang.de' }, { value: 'es', native: 'Español', key: 'lang.es' },
+    { value: 'ru', native: 'Русский', key: 'lang.ru' }, { value: 'pt', native: 'Português', key: 'lang.pt' },
+    { value: 'it', native: 'Italiano', key: 'lang.it' }, { value: 'nl', native: 'Nederlands', key: 'lang.nl' },
+    { value: 'pl', native: 'Polski', key: 'lang.pl' }, { value: 'tr', native: 'Türkçe', key: 'lang.tr' },
+    { value: 'vi', native: 'Tiếng Việt', key: 'lang.vi' }, { value: 'th', native: 'ไทย', key: 'lang.th' },
+    { value: 'ar', native: 'العربية', key: 'lang.ar' }, { value: 'hi', native: 'हिन्दी', key: 'lang.hi' },
+    { value: 'mn', native: 'Монгол', key: 'lang.mn' },
+  ].map(o => ({
+    // 母语名固定不变（用户扫这个列表找的是"我要翻成的那门语言"），
+    // 括注跟着界面语言走 —— 英文界面下 langopt.suffix 是空串，
+    // 就只剩母语名
+    value: o.value,
+    label: o.native ? `${o.native}${t('langopt.suffix', { name: t(o.key) })}` : t(o.key),
+  }))
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -439,40 +456,40 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               <Select value={sourceLang} onChange={setSourceLang} size="small" style={{ width: 140 }} options={langOpts} />
               <Button size="small" onClick={() => { const s = sourceLang; const tgt = targetLang === 'auto' ? 'en' : targetLang; setSourceLang(tgt); setTargetLang(s === 'auto' ? 'en' : s) }}>⇄</Button>
               <Select value={targetLang} onChange={setTargetLang} size="small" style={{ width: 140 }} options={langOpts.filter(o => o.value !== 'auto')} />
-              <Button type="primary" size="small" onClick={translate} loading={translating}>翻译</Button>
-              <Button size="small" onClick={fillPageText}>当前页</Button>
-              <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>清除</Button>
-              <Tooltip title={speech.state === 'playing' ? '暂停朗读' : speech.state === 'paused' ? '继续朗读' : '朗读上面的文本'}>
+              <Button type="primary" size="small" onClick={translate} loading={translating}>{t('side.translate.btn')}</Button>
+              <Button size="small" onClick={fillPageText}>{t('side.translate.currentPage')}</Button>
+              <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>{t('side.translate.clear')}</Button>
+              <Tooltip title={speech.state === 'playing' ? t('side.speak.pause') : speech.state === 'paused' ? t('side.speak.resume') : t('side.speak.play')}>
                 <Button size="small" onClick={toggleSpeak}
                         icon={speech.state === 'playing' ? <PauseCircleOutlined /> : speech.state === 'paused' ? <PlayCircleOutlined /> : <SoundOutlined />} />
               </Tooltip>
               {speech.state !== 'idle' && (
-                <Tooltip title="停止朗读"><Button size="small" onClick={speech.stop} icon={<CloseCircleOutlined />} /></Tooltip>
+                <Tooltip title={t('side.speak.stop')}><Button size="small" onClick={speech.stop} icon={<CloseCircleOutlined />} /></Tooltip>
               )}
             </div>
             {speech.state !== 'idle' && (
               <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399', alignItems: 'baseline', flexShrink: 0 }}>
-                <span style={{ flexShrink: 0 }}>{speech.state === 'paused' ? '已暂停' : '朗读中'} {speech.index + 1}/{speech.sentences.length}</span>
+                <span style={{ flexShrink: 0 }}>{speech.state === 'paused' ? t('side.speak.paused') : t('side.speak.playing')} {speech.index + 1}/{speech.sentences.length}</span>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#606266' }}>
                   {speech.sentences[speech.index] || ''}
                 </span>
               </div>
             )}
-            <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="选中文本后自动填充或点当前页" />
+            <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder={t('side.translate.srcPlaceholder')} />
             {translateError && (
               <Alert
                 type="error" showIcon message={translateError}
-                action={<Button size="small" type="link" onClick={() => window.dispatchEvent(new CustomEvent('open-settings'))}>去设置</Button>}
+                action={<Button size="small" type="link" onClick={() => window.dispatchEvent(new CustomEvent('open-settings'))}>{t('side.translate.goSettings')}</Button>}
               />
             )}
-            <Input.TextArea className="panel-textarea" value={resultText} readOnly placeholder="翻译结果" />
+            <Input.TextArea className="panel-textarea" value={resultText} readOnly placeholder={t('side.translate.resultPlaceholder')} />
           </div>
         )}
         {activeTab === 'vocabulary' && (
           <div className="panel-body" style={{ flex: 1 }}>
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto' }}>
               {words.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>暂无生词，翻译时会自动记录</div>
+                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>{t('side.vocab.empty')}</div>
               ) : (
                 words.map((w, i) => (
                   <div key={w.id || i} className="panel-card" style={{ padding: '8px 8px 4px', marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, position: 'relative' }}>
@@ -482,7 +499,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                       <div style={{ display: 'flex', gap: 8 }}>
                         {w.page_num > 0 && (
                           <span style={{ cursor: 'pointer' }} onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: w.page_num }))}>
-                            第{w.page_num}页
+                            {t('common.pageNo', { page: w.page_num })}
                           </span>
                         )}
                         <span>{w.created_at || ''}</span>
@@ -498,19 +515,19 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         )}
         {activeTab === 'notes' && (
           <div className="panel-body" style={{ flex: 1 }}>
-            <Input.TextArea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="输入笔记..." />
+            <Input.TextArea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder={t('side.notes.placeholder')} />
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {['#FFD700', '#FF6B6B', '#51CF66', '#339AF0', '#CC66FF'].map(c => (
                 <div key={c} onClick={() => setNoteColor(c)} style={{ width: 18, height: 18, borderRadius: '50%', background: c, cursor: 'pointer', border: noteColor === c ? '2px solid #303133' : '2px solid transparent', flexShrink: 0 }} />
               ))}
-              <Button type="primary" size="small" onClick={addNote}>添加笔记</Button>
+              <Button type="primary" size="small" onClick={addNote}>{t('side.notes.add')}</Button>
             </div>
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
-              {notes.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无笔记</div> : notes.map(n => (
+              {notes.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>{t('side.notes.empty')}</div> : notes.map(n => (
                 <div key={n.id} className="panel-card" style={{ padding: 8, marginBottom: 6, borderRadius: 4, borderLeft: '3px solid ' + (n.color || '#ffd43b'), fontSize: 12 }}>
                   <div>{n.content}</div>
                   <div style={{ display: 'flex', fontSize: 11, color: '#909399', marginTop: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>第{n.page_num}页 {n.created_at || ''}</span>
+                    <span>{t('common.pageNo', { page: n.page_num })} {n.created_at || ''}</span>
                     <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={() => deleteNote(n.id)} />
                   </div>
                 </div>
@@ -521,7 +538,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         {activeTab === 'bookmarks' && (
           <div className="panel-body" style={{ flex: 1 }}>
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto' }}>
-              {bookmarks.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>暂无书签</div> : bookmarks.map(b => (
+              {bookmarks.length === 0 ? <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20 }}>{t('side.bookmarks.empty')}</div> : bookmarks.map(b => (
                 <div key={b.id} style={{ padding: '6px 8px', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
                     onClick={() => { if (editingBmId !== b.id) window.dispatchEvent(new CustomEvent('go-to-page', { detail: b.page_num })) }}>
@@ -547,11 +564,11 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                           }}
                         />
                       ) : (
-                        <span onClick={() => { setEditingBmId(b.id); setEditingBmTitle(b.title || `第${b.page_num}页`) }} style={{ color: '#303133' }}>{b.title || `第${b.page_num}页`}</span>
+                        <span onClick={() => { setEditingBmId(b.id); setEditingBmTitle(b.title || t('common.pageNo', { page: b.page_num })) }} style={{ color: '#303133' }}>{b.title || t('common.pageNo', { page: b.page_num })}</span>
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ color: '#909399', flexShrink: 0, fontSize: 11 }}>第{b.page_num}页 {b.created_at || ''}</span>
+                      <span style={{ color: '#909399', flexShrink: 0, fontSize: 11 }}>{t('common.pageNo', { page: b.page_num })} {b.created_at || ''}</span>
                       <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ width: 20, height: 20, minWidth: 0, fontSize: 10 }} onClick={function(e) { e.stopPropagation(); api.deleteBookmark(b.id).then(function() { api.getBookmarks(book.id).then(function(r) { setBookmarks(r.bookmarks || []) }) }) }} />
                     </div>
                   </div>
@@ -563,7 +580,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
         {activeTab === 'search' && (
           <div className="panel-body" style={{ flex: 1 }}>
             <Input.Search
-              placeholder="搜索当前文档..." value={searchQuery} allowClear
+              placeholder={t('side.search.placeholder')} value={searchQuery} allowClear
               onChange={e => { setSearchQuery(e.target.value); if (!e.target.value) setSearchResults([]) }}
               loading={searching}
               onSearch={async (val) => {
@@ -572,22 +589,22 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                 try {
                   const r = await api.search(book.id, val.trim())
                   setSearchResults(r.results || [])
-                } catch { message.error('搜索失败') }
+                } catch { message.error(t('side.search.failed')) }
                 setSearching(false)
               }}
             />
             <div className="panel-scroll" style={{ flex: 1, overflowY: 'auto', marginTop: 8 }}>
               {searchResults.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>输入关键词搜索全文</div>
+                <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 20, fontSize: 12 }}>{t('side.search.hint')}</div>
               ) : (
                 <>
-                  <div style={{ fontSize: 11, color: '#909399', marginBottom: 6 }}>共 {searchResults.length} 条结果</div>
+                  <div style={{ fontSize: 11, color: '#909399', marginBottom: 6 }}>{t('side.search.count', { count: searchResults.length })}</div>
                   {searchResults.map((r, i) => {
                     const page = r.page || Math.ceil((r.line || i) / 40) || 1
                     return (
                       <div key={i} className="panel-card" style={{ padding: 8, marginBottom: 6, borderRadius: 4, border: '1px solid #e4e7ed', fontSize: 12, cursor: 'pointer' }}
                         onClick={() => window.dispatchEvent(new CustomEvent('go-to-page', { detail: page }))}>
-                        <div style={{ color: '#1677ff', marginBottom: 4 }}>第{page}页 行{r.line || i + 1}</div>
+                        <div style={{ color: '#1677ff', marginBottom: 4 }}>{t('side.search.hit', { page, line: r.line || i + 1 })}</div>
                         <div style={{ color: '#606266', lineHeight: 1.6, wordBreak: 'break-all' }} dangerouslySetInnerHTML={{
                           __html: (r.context || r.matched || '').replace(new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<span style="background:#ffd43b;padding:0 2px">${m}</span>`)
                         }} />
@@ -604,36 +621,36 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             {graphExists && (
               <div style={{ display: 'flex', gap: 4, paddingBottom: 6, flexShrink: 0, alignItems: 'center', flexWrap: 'nowrap' }}>
                 <Select size="small" value={graphLayout} onChange={setGraphLayout} style={{ width: 82 }}
-                  options={[{ value: 'force', label: '力导向' }, { value: 'circular', label: '环形' }, { value: 'radial', label: '辐射' }]} />
+                  options={[{ value: 'force', label: t('side.kg.layout.force') }, { value: 'circular', label: t('side.kg.layout.circular') }, { value: 'radial', label: t('side.kg.layout.radial') }]} />
                 <Select size="small" value={graphLabels} onChange={setGraphLabels} style={{ width: 82 }}
-                  options={[{ value: 'auto', label: '标签少' }, { value: 'all', label: '标签全' }, { value: 'none', label: '标签隐' }]} />
+                  options={[{ value: 'auto', label: t('side.kg.label.auto') }, { value: 'all', label: t('side.kg.label.all') }, { value: 'none', label: t('side.kg.label.none') }]} />
                 {graphLayout !== 'circular' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 10, color: '#909399' }}>疏</span>
+                    <span style={{ fontSize: 10, color: '#909399' }}>{t('side.kg.sparse')}</span>
                     <input type="range" min={100} max={800} step={50} value={graphRepulsion} onChange={e => setGraphRepulsion(Number(e.target.value))} style={{ width: 50, margin: 0 }} />
-                    <span style={{ fontSize: 10, color: '#909399' }}>密</span>
+                    <span style={{ fontSize: 10, color: '#909399' }}>{t('side.kg.dense')}</span>
                   </div>
                 )}
-                <Button size="small" type={showEntityList ? 'primary' : 'default'} onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>{showEntityList ? '隐藏列表' : '列表'}</Button>
-                <Tooltip title="缩小"><Button size="small" icon={<ZoomOutOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} /></Tooltip>
-                <Tooltip title="放大"><Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} /></Tooltip>
-                <Tooltip title="重置视图"><Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button></Tooltip>
-                <Button size="small" danger onClick={async () => { if (!book || !graphExists) return; await api.deleteKnowledgeGraph(book.id); setGraphExists(false); setGraphData(null); setSelectedEntity(null); if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null } }}>清除</Button>
+                <Button size="small" type={showEntityList ? 'primary' : 'default'} onClick={() => setShowEntityList(v => !v)} style={{ fontSize: 11 }}>{showEntityList ? t('side.kg.list.hide') : t('side.kg.list.show')}</Button>
+                <Tooltip title={t('side.kg.zoomOut')}><Button size="small" icon={<ZoomOutOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) / 1.3 }] }) } catch {} }} /></Tooltip>
+                <Tooltip title={t('side.kg.zoomIn')}><Button size="small" icon={<ZoomInOutlined />} onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: (chartRef.current.getOption().series[0]?.zoom || 1) * 1.3 }] }) } catch {} }} /></Tooltip>
+                <Tooltip title={t('side.kg.reset')}><Button size="small" onClick={() => { try { chartRef.current?.setOption({ series: [{ zoom: 1, center: ['50%', '50%'] }] }) } catch {} }} style={{ fontSize: 11, padding: '0 6px' }}>⊡</Button></Tooltip>
+                <Button size="small" danger onClick={async () => { if (!book || !graphExists) return; await api.deleteKnowledgeGraph(book.id); setGraphExists(false); setGraphData(null); setSelectedEntity(null); if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null } }}>{t('side.kg.clear')}</Button>
               </div>
             )}
             {graphExists && (
               <div style={{ fontSize: 10, color: '#909399', paddingBottom: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#1677ff', marginRight:2 }}></span>概念</span>
-                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#52c41a', marginRight:2 }}></span>技术</span>
-                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#faad14', marginRight:2 }}></span>方法</span>
-                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#722ed1', marginRight:2 }}></span>人物</span>
-                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#eb2f96', marginRight:2 }}></span>术语</span>
+                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#1677ff', marginRight:2 }}></span>{t('side.kg.type.concept')}</span>
+                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#52c41a', marginRight:2 }}></span>{t('side.kg.type.technology')}</span>
+                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#faad14', marginRight:2 }}></span>{t('side.kg.type.method')}</span>
+                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#722ed1', marginRight:2 }}></span>{t('side.kg.type.person')}</span>
+                <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#eb2f96', marginRight:2 }}></span>{t('side.kg.type.term')}</span>
               </div>
             )}
             <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 6 }}>
               {graphExists && showEntityList && graphData && (
                 <div style={{ width: 150, flexShrink: 0, fontSize: 11, borderRight: '1px solid #f0f0f0', paddingRight: 4, display: 'flex', flexDirection: 'column' }}>
-                  <Input size="small" placeholder="搜索实体..." value={graphSearch} onChange={e => setGraphSearch(e.target.value)} style={{ marginBottom: 4, fontSize: 11 }} />
+                  <Input size="small" placeholder={t('side.kg.entityPlaceholder')} value={graphSearch} onChange={e => setGraphSearch(e.target.value)} style={{ marginBottom: 4, fontSize: 11 }} />
                   <div style={{ flex: 1, overflowY: 'auto' }}>
                     {graphData.nodes.filter(n => n.level >= 2 && (!graphSearch || n.label.includes(graphSearch))).map((n, i) => (
                       <div key={n.id} style={{ padding: '3px 6px', cursor: 'pointer', borderRadius: 3, color: '#303133', marginBottom: 2, background: selectedEntity?.id === n.id ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${{root:'#636e72',chapter:'#13c2c2',concept:'#1677ff',technology:'#52c41a',method:'#faad14',person:'#722ed1',term:'#eb2f96'}[n.type] || '#bfbfbf'}` }} onClick={() => setSelectedEntity(n)}>{n.label}</div>
@@ -645,7 +662,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               {!graphExists && !extracting && (
                 <div style={{ textAlign: 'center', color: '#c0c4cc', padding: 30, fontSize: 12 }}>
                   <div style={{ fontSize: 32, marginBottom: 6 }}>🔗</div>
-                  点击下方按钮生成知识图谱
+                  {t('side.kg.empty')}
                 </div>
               )}
               {extracting && (
@@ -657,17 +674,19 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
                     strokeColor="#1677ff"
                   />
                   <div style={{ textAlign: 'center', color: '#606266', marginTop: 8 }}>
-                    {progress?.message || '正在启动...'}
+                    {/* 后端 progress.stage 是固定的几个值，字典里有对应文案；
+                        还没报到 stage 时（刚点下去那一下）显示「正在启动」 */}
+                    {t('side.kg.stage.' + (progress?.stage || ''), null, t('side.kg.starting'))}
                   </div>
                   {progress?.total > 0 && (
                     <div style={{ textAlign: 'center', color: '#909399', marginTop: 2 }}>
-                      第 {progress.current}/{progress.total} 块
-                      {progress.eta > 0 && ` · 约剩 ${fmtDuration(progress.eta)}`}
+                      {t('side.kg.chunk', { cur: progress.current, total: progress.total })}
+                      {progress.eta > 0 && t('side.kg.eta', { time: fmtDuration(progress.eta) })}
                     </div>
                   )}
                   {progress?.eta == null && progress?.elapsed > 0 && (
                     <div style={{ textAlign: 'center', color: '#c0c4cc', marginTop: 2 }}>
-                      已用 {fmtDuration(progress.elapsed)}
+                      {t('side.kg.elapsed', { time: fmtDuration(progress.elapsed) })}
                     </div>
                   )}
                 </div>
@@ -677,7 +696,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
             <div style={{ marginTop: 'auto' }}>
               <Button size="small" type="primary" block disabled={extracting} loading={extracting}
                 onClick={startExtract}>
-                {extracting ? '生成中...' : graphExists ? '重新生成' : '生成图谱'}
+                {extracting ? t('side.kg.generating') : graphExists ? t('side.kg.regenerate') : t('side.kg.generate')}
               </Button>
             </div>
           </div>
@@ -687,7 +706,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
           {selectedEntity && (
             <div>
               <div style={{ marginBottom: 8 }}>
-                <span style={{ fontSize: 11, color: '#909399' }}>类型：</span>
+                <span style={{ fontSize: 11, color: '#909399' }}>{t('side.kg.typeLabel')}</span>
                 <span style={{ fontSize: 13 }}>{selectedEntity.type || 'concept'}</span>
               </div>
               {selectedEntity.description && (

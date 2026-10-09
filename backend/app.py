@@ -42,8 +42,24 @@ from flask import jsonify
 @app.errorhandler(Exception)
 def handle_all_exceptions(e):
     """捕获所有未处理异常，记录日志并返回 500"""
+    # Flask 自己抛的 404 / 405 / 415 也是 Exception。归到下面那两条之前先认出来，
+    # 否则访问一个不存在的地址会被报成「服务器内部错误: 404 Not Found」——
+    # 状态码变成 500，排查时指向完全错误的方向。
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return jsonify({"error": e.description, "code": "HTTP_ERROR",
+                        "params": {"status": e.code}}), e.code
+    # 各路由都是 `XxxRequest(**request.json)` 直接构造 pydantic 模型的，
+    # 校验不过抛的是 ValidationError。它是**用户输入不合法**，不是服务器
+    # 出故障 —— 回 400 + 可读文案，否则前端只会显示一坨 "1 validation error
+    # for XxxRequest..." 的英文堆栈。
+    from pydantic import ValidationError
+    if isinstance(e, ValidationError):
+        return jsonify({"error": f"请求参数不合法: {e}", "code": "INVALID_REQUEST",
+                        "params": {"msg": str(e)}}), 400
     traceback.print_exc()
-    return jsonify({"error": f"服务器内部错误: {str(e)}", "code": "INTERNAL_ERROR"}), 500
+    return jsonify({"error": f"服务器内部错误: {str(e)}", "code": "INTERNAL_ERROR",
+                    "params": {"msg": str(e)}}), 500
 
 
 if __name__ == '__main__':

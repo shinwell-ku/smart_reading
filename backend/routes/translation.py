@@ -10,7 +10,7 @@ from core.database import get_db
 from core.config import CACHE_DIR
 from core.config import get_translator
 from models import TranslationRecord, Vocabulary, Book
-from services.translator import NOT_CONFIGURED_MSG
+from services.translator import NOT_CONFIGURED_ERR
 from schemas import (
     TranslateRequest, TranslateResponse, FullTranslateRequest,
     TranslationStatusResponse, WordCreate, WordResponse, WordListResponse,
@@ -23,7 +23,7 @@ translation_bp = Blueprint('translation', __name__, url_prefix='/api/translate')
 def translate_text():
     data = TranslateRequest(**request.json)
     if not data.text.strip():
-        return jsonify({"error": "翻译文本不能为空"}), 400
+        return jsonify({"error": "翻译文本不能为空", "code": "EMPTY_TEXT"}), 400
 
     try:
         translator = get_translator()
@@ -47,11 +47,14 @@ def translate_text():
             source_lang=result.get('detected_lang', data.source_lang),
             target_lang=data.target_lang,
             error=error,
+            code=result.get('code'),
+            params=result.get('params'),
         )
         return jsonify(resp.model_dump())
 
     except Exception as e:
-        return jsonify({"error": f"翻译失败: {str(e)}"}), 500
+        return jsonify({"error": f"翻译失败: {str(e)}", "code": "TRANSLATE_FAILED",
+                     "params": {"msg": str(e)}}), 500
 
 
 @translation_bp.route('/full', methods=['POST'])
@@ -60,18 +63,19 @@ def translate_full_book():
 
     text_path = os.path.join(CACHE_DIR, f'book_{data.book_id}_text.txt')
     if not os.path.exists(text_path):
-        return jsonify({"error": "书籍文本不存在，请先解析"}), 400
+        return jsonify({"error": "书籍文本不存在，请先解析", "code": "TEXT_NOT_FOUND"}), 400
 
     translator = get_translator()
     if not translator.is_configured():
-        return jsonify({"error": NOT_CONFIGURED_MSG}), 400
+        return jsonify(NOT_CONFIGURED_ERR), 400
 
     with open(text_path, 'r', encoding='utf-8') as f:
         full_text = f.read()
 
     # 扫描版 PDF 没有文本层，抽出来是空的；提前拦下，别起一个注定空跑的任务
     if not full_text.strip():
-        return jsonify({"error": "该书没有可翻译的文本（可能是扫描版 PDF）"}), 400
+        return jsonify({"error": "该书没有可翻译的文本（可能是扫描版 PDF）",
+                     "code": "NO_TRANSLATABLE_TEXT"}), 400
 
     def translate_task():
         try:
