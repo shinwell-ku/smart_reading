@@ -21,6 +21,19 @@ const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
 
 export const isSupported = !!synth
 
+// 页面刷新 / 关闭时把没念完的队列掐掉。
+//
+// 必须挂在模块层，不能写在 useEffect 的清理函数里 —— 整页刷新时 React
+// 根本没机会卸载组件，清理函数不会执行。而语音队列是挂在浏览器进程上的，
+// 渲染进程一换，旧队列就没人管了：会继续念一段，然后莫名其妙地停住。
+if (synth) {
+  const kill = () => { try { synth.cancel() } catch { /* 正在卸载，忽略 */ } }
+  // 三个都挂上：不同平台/不同跳转方式触发的钩子不一样
+  window.addEventListener('beforeunload', kill)
+  window.addEventListener('pagehide', kill)
+  window.addEventListener('unload', kill)
+}
+
 // ── 语音列表 ────────────────────────────────────────────────
 // Chromium 的 getVoices() 首次调用返回空数组，要等 voiceschanged 事件才有。
 // 这是已知行为，不是 bug —— 所以这里同步取一次、异步再取一次。
