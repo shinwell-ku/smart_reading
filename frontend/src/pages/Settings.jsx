@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Button, message, Modal, Switch, Slider, Select, Input, Form, Space, AutoComplete, Divider, Skeleton } from 'antd'
-import { SettingOutlined, CloudServerOutlined, DatabaseOutlined, ReadOutlined, ReloadOutlined, FolderOpenOutlined, SoundOutlined } from '@ant-design/icons'
+import { SettingOutlined, CloudServerOutlined, DatabaseOutlined, ReadOutlined, ReloadOutlined, FolderOpenOutlined, SoundOutlined, GlobalOutlined } from '@ant-design/icons'
 import { loadVoices, readTtsPrefs, writeTtsPrefs, pickVoice, isSupported as ttsSupported } from '../useSpeech'
+import { useI18n, LANGS } from '../i18n'
 
 const PROVIDER_OPTIONS = [
   { group: '国内',
@@ -59,6 +60,7 @@ function SliderWithValue({ value, ...rest }) {
 }
 
 export default function Settings({ open, onClose }) {
+  const { lang, t, setLang } = useI18n()
   const [eyeCare, setEyeCare] = useState(localStorage.getItem('sr_eyeCare') === 'true')
 
   // ── 朗读偏好（存 localStorage，跟前后的 sr_* 一个路子）──
@@ -252,6 +254,13 @@ export default function Settings({ open, onClose }) {
           wrapperCol={WRAPPER_COL}
           onFinish={() => {}}   /* 纯布局容器；阻止回车隐式提交 */
         >
+          <SectionTitle icon={<GlobalOutlined />}>{t('settings.section.general')}</SectionTitle>
+
+          <Form.Item label={t('settings.language.label')} tooltip={t('settings.language.tooltip')}>
+            <Select value={lang} onChange={setLang} style={FIELD_W}
+              options={LANGS.map(l => ({ value: l.value, label: l.label }))} />
+          </Form.Item>
+
           <SectionTitle icon={<ReadOutlined />}>阅读</SectionTitle>
 
           <Form.Item label="护眼模式" tooltip="阅读区与工具面板使用米色纸感配色">

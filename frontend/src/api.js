@@ -1,4 +1,24 @@
+import { t, errText } from './i18n'
+
 const API_BASE = 'http://127.0.0.1:5001'
+
+// 后端的错误码 → 当前语言的文案，在这里统一翻译。
+//
+// 为什么不放在各个调用点：全库 50+ 个调用点都是 `if (r.error)` 当布尔量判断、
+// 然后直接把 r.error 显示出去，在这里换掉它，调用点一行都不用改，也不会漏。
+// code 未知（比如后端版本对不上）时 errText 会兜住后端原文，不会显示 err.XXX。
+function localizeError(r) {
+  if (r && r.error && r.code) r.error = errText(r)
+  return r
+}
+
+// fetch 自己抛的是 "Failed to fetch" / "Load failed" 这类浏览器文案，
+// 中文用户看到就是英文。统一换成本地化过的错误。
+function netError(code) {
+  const e = new Error(t('err.' + code))
+  e.code = code
+  return e
+}
 
 async function req(method, path, body, timeoutMs) {
   const opts = { method, headers: {} }
@@ -6,9 +26,12 @@ async function req(method, path, body, timeoutMs) {
     if (body instanceof FormData) opts.body = body
     else { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body) }
   }
-  const fetchPromise = fetch(`${API_BASE}${path}`, opts).then(r => r.json())
+  const fetchPromise = fetch(`${API_BASE}${path}`, opts)
+    .then(r => r.json())
+    .then(localizeError)
+    .catch(e => { throw e.code ? e : netError('NETWORK') })
   if (timeoutMs) {
-    return Promise.race([fetchPromise, new Promise((_, rj) => setTimeout(() => rj(new Error('超时')), timeoutMs))])
+    return Promise.race([fetchPromise, new Promise((_, rj) => setTimeout(() => rj(netError('TIMEOUT')), timeoutMs))])
   }
   return fetchPromise
 }
