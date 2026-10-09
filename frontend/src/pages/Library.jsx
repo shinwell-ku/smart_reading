@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
+import { useI18n } from '../i18n'
 import { Input, Button, message, Modal, Spin } from 'antd'
 import { LoadingOutlined } from '@ant-design/icons'
 import { CloudUploadOutlined } from '@ant-design/icons'
 
 export default function Library({ onOpenBook }) {
+  const { t } = useI18n()
   const [books, setBooks] = useState([])
   const [search, setSearch] = useState('')
   const [importing, setImporting] = useState(false)
@@ -34,10 +36,22 @@ export default function Library({ onOpenBook }) {
     if (importing) return
     setImporting(true)
     try {
-      const result = await window.electronAPI.openFileDialog({})
+      // 以前传的是空对象，对话框的标题和过滤器名全部吃 main.js 里的
+      // 写死中文 —— 英文界面下就露馅了。这里把 options 传全。
+      const result = await window.electronAPI.openFileDialog({
+        title: t('library.dialogTitle'),
+        filters: [
+          { name: t('library.filterDocs'), extensions: ['pdf', 'docx', 'txt', 'md', 'markdown', 'html', 'htm'] },
+          { name: 'PDF', extensions: ['pdf'] },
+          { name: 'Word', extensions: ['docx'] },
+          { name: 'Text / Markdown', extensions: ['txt', 'md', 'markdown'] },
+          { name: 'HTML', extensions: ['html', 'htm'] },
+          { name: t('library.dialogAll'), extensions: ['*'] },
+        ],
+      })
       if (result.canceled || !result.filePaths.length) return
 
-      const hide = message.loading('正在导入...', 0)
+      const hide = message.loading(t('library.importing'), 0)
       let success = 0, fail = 0
       const dupes = []        // 同名文档，先攒着，回头统一问用户
 
@@ -51,13 +65,13 @@ export default function Library({ onOpenBook }) {
         } catch { fail++ }
       }
       hide()
-      if (success) message.success(`导入成功 ${success} 本`)
-      if (fail) message.warning(`${fail} 本失败`)
+      if (success) message.success(t('library.importedOk', { count: success }))
+      if (fail) message.warning(t('library.importedFail', { count: fail }))
       await loadBooks()
 
       if (dupes.length) askAboutDuplicates(dupes)
     } catch {
-      message.error('导入异常')
+      message.error(t('library.importError'))
     } finally {
       setImporting(false)
     }
@@ -66,31 +80,31 @@ export default function Library({ onOpenBook }) {
   // 同名文档由用户决定是否仍然导入
   const askAboutDuplicates = (dupes) => {
     Modal.confirm({
-      title: `有 ${dupes.length} 个同名文档`,
+      title: t('library.dupTitle', { count: dupes.length }),
       width: 460,
       content: (
         <div style={{ fontSize: 12, lineHeight: 1.9 }}>
-          <div style={{ color: '#909399', marginBottom: 6 }}>书库中已存在以下文档：</div>
+          <div style={{ color: '#909399', marginBottom: 6 }}>{t('library.dupIntro')}</div>
           {dupes.map(d => (
             <div key={d.fp} style={{ wordBreak: 'break-all' }}>
               • {d.name}
-              <span style={{ color: '#909399' }}>（已有《{d.title}》）</span>
+              <span style={{ color: '#909399' }}>{t('library.dupExisting', { title: d.title })}</span>
             </div>
           ))}
           <div style={{ marginTop: 8, color: '#fa8c16' }}>
-            仍然导入会在书库中多出一条重复记录，并多占一份磁盘空间。
+            {t('library.dupWarn')}
           </div>
         </div>
       ),
-      okText: '仍然导入', cancelText: '跳过',
+      okText: t('library.dupOk'), cancelText: t('library.dupSkip'),
       onOk: async () => {
-        const hide = message.loading('正在导入...', 0)
+        const hide = message.loading(t('library.importing'), 0)
         let ok = 0
         for (const d of dupes) {
           try { const r = await api.importBookByPath(d.fp, true); if (!r.error) ok++ } catch {}
         }
         hide()
-        if (ok) message.success(`又导入 ${ok} 本`)
+        if (ok) message.success(t('library.importedMore', { count: ok }))
         await loadBooks()
       },
     })
@@ -123,18 +137,18 @@ export default function Library({ onOpenBook }) {
     setDraggingId(null)
     if (dragFrom.current === null) return
     dragFrom.current = null
-    try { await api.reorderBooks(books.map(b => b.id)) } catch { message.error('排序保存失败') }
+    try { await api.reorderBooks(books.map(b => b.id)) } catch { message.error(t('library.reorderFailed')) }
   }
 
   const handleDelete = (id, title) => {
     Modal.confirm({
-      title: `确定删除《${title}》？`,
-      content: '所有笔记和进度也将被删除',
-      okText: '确定', cancelText: '取消',
+      title: t('library.deleteTitle', { title }),
+      content: t('library.deleteBody'),
+      okText: t('common.ok'), cancelText: t('common.cancel'),
       okButtonProps: { danger: true },
       onOk: async () => {
         await api.deleteBook(id)
-        message.success('已删除')
+        message.success(t('library.deleted'))
         await loadBooks()
       }
     })
@@ -143,16 +157,16 @@ export default function Library({ onOpenBook }) {
   return (
     <>
       <div className="lib-header">
-        <h2>我的书库</h2>
+        <h2>{t('library.title')}</h2>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Input.Search placeholder="搜索书籍..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 200 }} size="small" />
-          <Button type="primary" size="small" icon={<CloudUploadOutlined />} onClick={handleImport} loading={importing}>导入书籍</Button>
+          <Input.Search placeholder={t('library.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 200 }} size="small" />
+          <Button type="primary" size="small" icon={<CloudUploadOutlined />} onClick={handleImport} loading={importing}>{t('library.import')}</Button>
         </div>
       </div>
       {loading ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#909399', flexDirection: 'column', gap: 8 }}>
           <Spin size="large" />
-          <p style={{ marginTop: 12 }}>正在加载书库...</p>
+          <p style={{ marginTop: 12 }}>{t('library.loading')}</p>
         </div>
       ) : filtered.length > 0 ? (
         <div className="book-grid">
@@ -175,7 +189,7 @@ export default function Library({ onOpenBook }) {
               </div>
               <div className="book-info">
                 <div className="book-title" title={b.title}>{b.title}</div>
-                <div className="book-meta">{b.file_type.toUpperCase()} · {b.total_pages || 0}页</div>
+                <div className="book-meta">{b.file_type.toUpperCase()} · {t('library.pages', { count: b.total_pages || 0 })}</div>
               </div>
             </div>
           ))}
@@ -183,7 +197,7 @@ export default function Library({ onOpenBook }) {
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#909399', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 48 }}>📚</div>
-          <p>点击「导入书籍」添加 PDF / Word / Markdown 等文档</p>
+          <p>{t('library.empty')}</p>
         </div>
       )}
     </>
