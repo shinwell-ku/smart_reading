@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api'
 import { Button, message, Modal, Switch, Slider, Select, Input, Form, Space, AutoComplete, Divider, Skeleton } from 'antd'
-import { SettingOutlined, CloudServerOutlined, DatabaseOutlined, ReadOutlined, ReloadOutlined, FolderOpenOutlined } from '@ant-design/icons'
+import { SettingOutlined, CloudServerOutlined, DatabaseOutlined, ReadOutlined, ReloadOutlined, FolderOpenOutlined, SoundOutlined } from '@ant-design/icons'
+import { loadVoices, readTtsPrefs, writeTtsPrefs, pickVoice, isSupported as ttsSupported } from '../useSpeech'
 
 const PROVIDER_OPTIONS = [
   { group: '国内',
@@ -59,6 +60,22 @@ function SliderWithValue({ value, ...rest }) {
 
 export default function Settings({ open, onClose }) {
   const [eyeCare, setEyeCare] = useState(localStorage.getItem('sr_eyeCare') === 'true')
+
+  // ── 朗读偏好（存 localStorage，跟前后的 sr_* 一个路子）──
+  const [ttsPrefs, setTtsPrefs] = useState(readTtsPrefs)
+  const [ttsVoices, setTtsVoices] = useState([])
+  const updateTts = patch => setTtsPrefs(writeTtsPrefs(patch))
+  useEffect(() => { if (open) loadVoices().then(setTtsVoices) }, [open])
+  // 按语言排一下，中文语音排前面，方便找
+  const voiceOptions = ttsVoices
+    .slice()
+    .sort((a, b) => {
+      const az = a.lang.toLowerCase().startsWith(ttsPrefs.lang) ? 0 : 1
+      const bz = b.lang.toLowerCase().startsWith(ttsPrefs.lang) ? 0 : 1
+      return az - bz || a.lang.localeCompare(b.lang) || a.name.localeCompare(b.name)
+    })
+    .map(v => ({ value: v.voiceURI, label: `${v.name} · ${v.lang}${v.localService ? '' : '（在线）'}` }))
+  const noVoiceHint = ttsSupported && ttsVoices.length > 0 && !pickVoice(ttsVoices, ttsPrefs.lang)
 
   const [provider, setProvider] = useState('openai')
   const [apiBase, setApiBase] = useState('')
@@ -229,6 +246,51 @@ export default function Settings({ open, onClose }) {
           <Form.Item label="护眼模式" tooltip="阅读区与工具面板使用米色纸感配色">
             <Switch checked={eyeCare} onChange={toggleEyeCare} />
           </Form.Item>
+
+          <SectionTitle icon={<SoundOutlined />}>朗读</SectionTitle>
+
+          {!ttsSupported ? (
+            <Form.Item label=" " colon={false}>
+              <span style={{ color: '#e6a23c', fontSize: 12 }}>当前环境不支持语音合成</span>
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item
+                label="语音"
+                tooltip="用的是操作系统已安装的语音，不额外占用安装包体积。中文语音：macOS 有婷婷/美佳，Windows 需在「设置 → 时间和语言 → 语音」里装对应语言包"
+              >
+                <Select
+                  showSearch allowClear style={FIELD_W}
+                  value={ttsPrefs.voiceURI || undefined}
+                  placeholder={`跟随系统（${ttsVoices.length} 个可用）`}
+                  options={voiceOptions}
+                  optionFilterProp="label"
+                  onChange={uri => {
+                    const v = ttsVoices.find(x => x.voiceURI === uri)
+                    updateTts({ voiceURI: uri || '', lang: v ? v.lang.split('-')[0].toLowerCase() : ttsPrefs.lang })
+                  }}
+                />
+              </Form.Item>
+
+              <Form.Item label="语速" tooltip="1.0 为正常速度">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: FIELD_W }}>
+                  <Slider min={0.5} max={2} step={0.1} value={ttsPrefs.rate}
+                          onChange={v => updateTts({ rate: v })} style={{ flex: 1, margin: 0 }} />
+                  <span style={{ fontSize: 12, color: '#909399', width: 32 }}>{ttsPrefs.rate.toFixed(1)}×</span>
+                </div>
+              </Form.Item>
+
+              {noVoiceHint && (
+                <Form.Item label=" " colon={false}>
+                  <span style={{ color: '#e6a23c', fontSize: 12 }}>
+                    系统里没有「{ttsPrefs.lang === 'zh' ? '中文' : ttsPrefs.lang}」语音，朗读会用不了。
+                    macOS 到「系统设置 → 辅助功能 → 朗读内容 → 系统声音」下载；
+                    Windows 到「设置 → 时间和语言 → 语音」添加。
+                  </span>
+                </Form.Item>
+              )}
+            </>
+          )}
 
           <SectionTitle icon={<CloudServerOutlined />}>AI 引擎</SectionTitle>
 

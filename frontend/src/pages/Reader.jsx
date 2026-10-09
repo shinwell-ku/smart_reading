@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import { api } from '../api'
-import { Button, Slider, message, Tooltip } from 'antd'
+import { Button, Slider, message, notification, Tooltip } from 'antd'
 import { BarsOutlined, StarOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url'
+import { useSpeech, useTtsPrefs, resolveVoice, isSupported as ttsSupported } from '../useSpeech'
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
 export default function Reader({ book, onPageChange, onBack }) {
@@ -30,6 +31,16 @@ export default function Reader({ book, onPageChange, onBack }) {
   const isText = !!book?.file_type && book.file_type !== 'pdf'
   const chapters = book?.chapters || []
   const [outlineOpen, setOutlineOpen] = useState(false)
+
+  // ── 朗读 ──
+  const speech = useSpeech()
+  const ttsPrefs = useTtsPrefs()
+  const ttsVoice = resolveVoice(speech.voices, ttsPrefs)
+  const [continuous, setContinuous] = useState(false)
+  // 连续朗读要在异步回调里读最新值，用 ref 兜住
+  const continuousRef = useRef(false)
+  continuousRef.current = continuous
+  const readingPageRef = useRef(1)
   // 目录面板宽度：可拖拽，记住上次的宽度
   const [outlineWidth, setOutlineWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem('sr_outlineWidth'), 10)
@@ -332,6 +343,56 @@ export default function Reader({ book, onPageChange, onBack }) {
     scrollToPage(p)
   }, [numPages, scrollToPage])
 
+  // 取某一页的正文。文本类书直接有分页数组，PDF 要问后端。
+  const fetchPageText = useCallback(async (p) => {
+    if (!book) return ''
+    let raw = ''
+    if (isText && docxPages[p - 1]) raw = docxPages[p - 1]
+    else {
+      try { raw = (await api.getPageContent(book.id, p))?.content || '' } catch { raw = '' }
+    }
+    // 后端已经清过页眉页脚和隐形锚点，这里只兜掉零宽字符
+    return raw.replace(/[\u200b-\u200f\u2028-\u202f\ufeff]/g, '').trim()
+  }, [book, isText, docxPages])
+
+  // 念完一页后自动接着念下一页（连续朗读）
+  const readPageRef = useRef(null)
+  readPageRef.current = useCallback(async (p) => {
+    if (!ttsVoice) {
+      notification.warning({
+        message: '系统里没有可用的语音',
+        description: `找不到「${ttsPrefs.lang === 'zh' ? '中文' : ttsPrefs.lang}」语音，朗读无法开始。`,
+        duration: 8,
+      })
+      return
+    }
+    const text = await fetchPageText(p)
+    if (!text) { message.info(`第 ${p} 页没有可朗读的文字`); return }
+    readingPageRef.current = p
+    speech.speak(text, {
+      voice: ttsVoice,
+      rate: ttsPrefs.rate,
+      onFinish: () => {
+        if (!continuousRef.current) return
+        const next = readingPageRef.current + 1
+        if (next > numPages) { setContinuous(false); return }
+        goTo(next)
+        // 等页面滚过去、内容加载完再念，否则会和滚动打架
+        setTimeout(() => readPageRef.current?.(next), 600)
+      },
+    })
+  }, [ttsVoice, ttsPrefs, fetchPageText, speech, numPages, goTo])
+
+  const toggleReadPage = useCallback(() => {
+    if (speech.state === 'playing') return speech.pause()
+    if (speech.state === 'paused') return speech.resume()
+    if (!ttsSupported) { message.warning('当前环境不支持语音合成'); return }
+    readPageRef.current?.(pageRef.current)
+  }, [speech])
+
+  // 离开阅读页 / 关掉这本书时停掉声音，别让它念到下一本去
+  useEffect(() => () => speech.stop(), [book?.id])
+
   // 键盘
   useEffect(() => {
     const handler = (e) => {
@@ -439,6 +500,24 @@ export default function Reader({ book, onPageChange, onBack }) {
           else setScale(s => Math.min(3, s + 0.2))
         }} /></Tooltip>
         <Tooltip title="添加书签"><Button type="text" disabled={!numPages} icon={<StarOutlined />} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success('书签已添加: 第' + page + '页'); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }} /></Tooltip>
+        <Tooltip title={speech.state === 'playing' ? '暂停朗读' : speech.state === 'paused' ? '继续朗读' : '朗读本页'}>
+          <Button type="text" disabled={!numPages} onClick={toggleReadPage}
+                  style={{ color: speech.state !== 'idle' ? '#409eff' : undefined }}>
+            {speech.state === 'playing' ? '⏸' : '🔊'}
+          </Button>
+        </Tooltip>
+        {speech.state !== 'idle' && (
+          <>
+            <Tooltip title="停止朗读"><Button type="text" onClick={speech.stop}>⏹</Button></Tooltip>
+            <span style={{ fontSize: 11, color: '#909399', flexShrink: 0 }}>
+              {readingPageRef.current}页 {speech.index + 1}/{speech.sentences.length}句
+            </span>
+          </>
+        )}
+        <Tooltip title={continuous ? '关闭连续朗读（读完当前页会自动翻页）' : '连续朗读：读完当前页自动翻到下一页继续念'}>
+          <Button type="text" onClick={() => setContinuous(v => !v)}
+                  style={{ color: continuous ? '#409eff' : undefined }}>🔁</Button>
+        </Tooltip>
         <Tooltip title="全屏"><Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button></Tooltip>
       </div>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

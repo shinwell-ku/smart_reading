@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message, notification, Modal, Tooltip, Progress, Alert } from 'antd'
 import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
+import { useSpeech, useTtsPrefs, resolveVoice, isSupported as ttsSupported } from '../useSpeech'
 
 function cleanText(text) {
   if (!text) return ''
@@ -78,6 +79,29 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
   const graphRef = useRef(null)
   const chartRef = useRef(null)
   const resizeObserverRef = useRef(null)
+
+  // ── 朗读 ──
+  const speech = useSpeech()
+  const ttsPrefs = useTtsPrefs()
+  const ttsVoice = resolveVoice(speech.voices, ttsPrefs)
+
+  const toggleSpeak = () => {
+    if (speech.state === 'playing') return speech.pause()
+    if (speech.state === 'paused') return speech.resume()
+    if (!ttsSupported) { message.warning('当前环境不支持语音合成'); return }
+    const t = sourceText.trim()
+    if (!t) { message.info('请先输入或选中要朗读的文本'); return }
+    if (!ttsVoice) {
+      // 不静默降级：宁可不出声，也不能拿英文声音念中文
+      notification.warning({
+        message: '系统里没有可用的语音',
+        description: `找不到「${ttsPrefs.lang === 'zh' ? '中文' : ttsPrefs.lang}」语音。可以到「设置 → AI 引擎」下方的朗读区换一个，或在系统里装上对应语言包。`,
+        duration: 8,
+      })
+      return
+    }
+    speech.speak(t, { voice: ttsVoice, rate: ttsPrefs.rate })
+  }
 
   useEffect(() => {
     const h = (e) => { if (e.detail && activeTab === 'translate') setSourceText(cleanText(e.detail.slice(0, 5000))) }
@@ -417,7 +441,21 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               <Button type="primary" size="small" onClick={translate} loading={translating}>翻译</Button>
               <Button size="small" onClick={fillPageText}>当前页</Button>
               <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>清除</Button>
+              <Tooltip title={speech.state === 'playing' ? '暂停朗读' : speech.state === 'paused' ? '继续朗读' : '朗读上面的文本'}>
+                <Button size="small" onClick={toggleSpeak}>{speech.state === 'playing' ? '⏸' : '🔊'}</Button>
+              </Tooltip>
+              {speech.state !== 'idle' && (
+                <Tooltip title="停止"><Button size="small" onClick={speech.stop}>⏹</Button></Tooltip>
+              )}
             </div>
+            {speech.state !== 'idle' && (
+              <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#909399', alignItems: 'baseline', flexShrink: 0 }}>
+                <span style={{ flexShrink: 0 }}>{speech.state === 'paused' ? '已暂停' : '朗读中'} {speech.index + 1}/{speech.sentences.length}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#606266' }}>
+                  {speech.sentences[speech.index] || ''}
+                </span>
+              </div>
+            )}
             <Input.TextArea className="panel-textarea" value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="选中文本后自动填充或点当前页" />
             {translateError && (
               <Alert
