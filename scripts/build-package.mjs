@@ -117,6 +117,52 @@ function setPyvenvHome(file, dir) {
   console.log(`  pyvenv.cfg home → ${dir}`);
 }
 
+/**
+ * 版本号体检。
+ *
+ * 版本号只在**发版**时改（`npm version minor --no-git-tag-version`），本地
+ * 试打包不用动 —— 所以这里只提醒、不拦截。
+ *
+ * 要防的是这么一种不报错的事故：版本号没改就重打了一次包，release/ 下
+ * 那份**已经传上 GitHub Release 的**安装包被静默覆盖，本地从此和线上
+ * 对不上，之后想复现或重传也没了基准。把当前处境直接摆出来，就不用记。
+ */
+function reportVersion() {
+  const version = JSON.parse(
+    fs.readFileSync(path.join(FRONTEND_DIR, 'package.json'), 'utf8')
+  ).version;
+
+  let released = false;
+  try {
+    const tags = execFileSync('git', ['tag', '-l', `v${version}`], {
+      cwd: DIR, encoding: 'utf8',
+    }).trim();
+    released = tags.length > 0;
+  } catch {
+    return; // 没有 git / 不是仓库，静默跳过
+  }
+
+  if (!released) {
+    console.log(`  版本 ${version}（还没打过 tag，看情况是首次发或本地试打）`);
+    return;
+  }
+
+  // 产物名从 electron-builder 的 artifactName 还原，别自己另写一套规则
+  const cfgPath = path.join(FRONTEND_DIR, 'build', 'electron-builder.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const expand = (tpl, ext) =>
+    tpl && tpl.replace(/\$\{version\}/g, version).replace(/\$\{ext\}/g, ext);
+  const files = [expand(cfg.mac?.artifactName, 'dmg'), expand(cfg.win?.artifactName, 'exe')]
+    .filter(Boolean);
+
+  console.log('');
+  console.log(`  ⚠️  版本 ${version} 已经发过（tag v${version} 在）`);
+  console.log(`      再打一次会覆盖 release/ 下的 ${files.join(' 和 ')}`);
+  console.log('      · 只是本地试打包 → 忽略这条，继续');
+  console.log('      · 要发新版 → 先跑 npm version minor --no-git-tag-version');
+  console.log('');
+}
+
 // ── 前置检查 ─────────────────────────────────────────────────
 function preflight() {
   if (!exists(path.join(BACKEND_SRC, 'app.py'))) {
@@ -316,6 +362,7 @@ function main() {
   console.log('==============================');
 
   preflight();
+  reportVersion();
 
   console.log('\n[1/5] 复制后端代码...');
   rm(RES_DIR);

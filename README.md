@@ -168,6 +168,10 @@ npm version patch --no-git-tag-version     # patch 修 bug / minor 加功能 / m
 
 版本号是**单点来源**：安装包文件名（electron-builder 的 `${version}`）和「关于」页（`vite.config.js` 注入的 `__APP_VERSION__`）都从 `frontend/package.json` 取，改这一处就够。
 
+**只有发版才需要改版本号**，本地试打包不用动 —— 重复构建只是覆盖自己那份产物。
+
+打包脚本会自己提醒你处在哪种状态：版本号已经打过 tag 就警告一句（说清会覆盖哪个文件、要不要先 bump），没打过就正常往下走。**是警告不是报错**，本地试打包是合法动作。
+
 #### 2. 写 CHANGELOG
 
 打开 [CHANGELOG.md](CHANGELOG.md)，把 `## [未发布]` 改成 `## [1.0.1] - 2026-01-01`，

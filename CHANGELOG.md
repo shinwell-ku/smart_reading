@@ -12,6 +12,11 @@
 
 ## [未发布]
 
+<!-- 下次发版写在这里。分类固定这四种，某一类没内容就整个不写：
+     新增 / 变更 / 修复 / 移除 -->
+
+## [1.1.0] - 2026-10-09
+
 ### 新增
 
 - **朗读** —— 用操作系统已装的语音朗读，不额外占安装包体积，离线可用
@@ -53,7 +58,6 @@
 - **数据管理**：整体备份与恢复、一键清除
 - 数据（书籍、笔记、图谱）全部留在本地；不自带任何本地模型
 
-<!-- 分类固定用这四种，某一类没有内容就整个不写：新增 / 变更 / 修复 / 移除 -->
-
-[未发布]: https://github.com/shinwellku/smart_reading/compare/v1.0.0...HEAD
+[未发布]: https://github.com/shinwellku/smart_reading/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/shinwellku/smart_reading/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/shinwellku/smart_reading/releases/tag/v1.0.0
