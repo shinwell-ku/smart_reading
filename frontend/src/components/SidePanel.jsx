@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message, notification, Modal, Tooltip, Progress, Alert } from 'antd'
-import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined, ZoomInOutlined, ZoomOutOutlined, SoundOutlined, PauseCircleOutlined, PlayCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { useSpeech, useTtsPrefs, resolveVoice, isSupported as ttsSupported } from '../useSpeech'
 
 function cleanText(text) {
@@ -442,10 +442,11 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
               <Button size="small" onClick={fillPageText}>当前页</Button>
               <Button size="small" onClick={() => { setSourceText(''); setResultText('') }}>清除</Button>
               <Tooltip title={speech.state === 'playing' ? '暂停朗读' : speech.state === 'paused' ? '继续朗读' : '朗读上面的文本'}>
-                <Button size="small" onClick={toggleSpeak}>{speech.state === 'playing' ? '⏸' : '🔊'}</Button>
+                <Button size="small" onClick={toggleSpeak}
+                        icon={speech.state === 'playing' ? <PauseCircleOutlined /> : speech.state === 'paused' ? <PlayCircleOutlined /> : <SoundOutlined />} />
               </Tooltip>
               {speech.state !== 'idle' && (
-                <Tooltip title="停止"><Button size="small" onClick={speech.stop}>⏹</Button></Tooltip>
+                <Tooltip title="停止朗读"><Button size="small" onClick={speech.stop} icon={<CloseCircleOutlined />} /></Tooltip>
               )}
             </div>
             {speech.state !== 'idle' && (

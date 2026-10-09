@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import { api } from '../api'
 import { Button, Slider, message, notification, Tooltip } from 'antd'
-import { BarsOutlined, StarOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
+import { BarsOutlined, StarOutlined, ZoomInOutlined, ZoomOutOutlined, SoundOutlined, PauseCircleOutlined, PlayCircleOutlined, CloseCircleOutlined, RetweetOutlined } from '@ant-design/icons'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url'
@@ -502,13 +502,12 @@ export default function Reader({ book, onPageChange, onBack }) {
         <Tooltip title="添加书签"><Button type="text" disabled={!numPages} icon={<StarOutlined />} onClick={async () => { if (!book) return; await api.addBookmark(book.id, { page_num: page }); message.success('书签已添加: 第' + page + '页'); window.dispatchEvent(new CustomEvent('refresh-bookmarks')) }} /></Tooltip>
         <Tooltip title={speech.state === 'playing' ? '暂停朗读' : speech.state === 'paused' ? '继续朗读' : '朗读本页'}>
           <Button type="text" disabled={!numPages} onClick={toggleReadPage}
-                  style={{ color: speech.state !== 'idle' ? '#409eff' : undefined }}>
-            {speech.state === 'playing' ? '⏸' : '🔊'}
-          </Button>
+                  style={{ color: speech.state !== 'idle' ? '#409eff' : undefined }}
+                  icon={speech.state === 'playing' ? <PauseCircleOutlined /> : speech.state === 'paused' ? <PlayCircleOutlined /> : <SoundOutlined />} />
         </Tooltip>
         {speech.state !== 'idle' && (
           <>
-            <Tooltip title="停止朗读"><Button type="text" onClick={speech.stop}>⏹</Button></Tooltip>
+            <Tooltip title="停止朗读"><Button type="text" onClick={speech.stop} icon={<CloseCircleOutlined />} /></Tooltip>
             <span style={{ fontSize: 11, color: '#909399', flexShrink: 0 }}>
               {readingPageRef.current}页 {speech.index + 1}/{speech.sentences.length}句
             </span>
@@ -516,7 +515,7 @@ export default function Reader({ book, onPageChange, onBack }) {
         )}
         <Tooltip title={continuous ? '关闭连续朗读（读完当前页会自动翻页）' : '连续朗读：读完当前页自动翻到下一页继续念'}>
           <Button type="text" onClick={() => setContinuous(v => !v)}
-                  style={{ color: continuous ? '#409eff' : undefined }}>🔁</Button>
+                  style={{ color: continuous ? '#409eff' : undefined }} icon={<RetweetOutlined />} />
         </Tooltip>
         <Tooltip title="全屏"><Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button></Tooltip>
       </div>
