@@ -182,7 +182,18 @@ npm version patch --no-git-tag-version     # patch 修 bug / minor 加功能 / m
 
 写累积了好几版的，顺手在上面补一个空的 `## [未发布]`。
 
-#### 3. 打包
+#### 3. 本地先跑一遍
+
+```bash
+cd frontend
+npm start          # 编译 + 起 Electron，主进程会自己拉起 Python 后端
+```
+
+**这一步别省。** 装机包发出去之后才发现问题，代价比现在大得多 —— 尤其有些毛病只有真机才出得来（音频输出、系统语音、不同平台的字号）。
+
+重点走一遍**这一版动过的地方**：新功能要真的点开用一次，改过的界面要看到，动过国际化就切到另一种语言再走一遍。
+
+#### 4. 打包
 
 ```bash
 npm run build:mac                  # → frontend/release/AI-SmartReading-1.0.1.dmg
@@ -192,10 +203,33 @@ Windows 包**必须在 Windows 机器上**构建（见上一节）：
 
 ```powershell
 cd backend ; uv sync
-cd ..\frontend ; npm run build:win
+cd ..\frontend ; npm run build:win   # → release\AI-SmartReading-Setup-1.0.1.exe
 ```
 
-#### 4. 提交并打 tag
+##### 两个平台都要发时
+
+**版本号必须在 Windows 机器打包之前就同步过去**，否则那边还是旧版本号，
+打出来叫 `AI-SmartReading-Setup-1.0.0.exe`，和 tag 对不上 —— 而这一步不报错。
+所以顺序要调整成「先提交推送、再打包」：
+
+```bash
+# ① 开发机：改完版本号和 CHANGELOG 就提交推送，此时还不要打 tag
+git add -A && git commit -m "chore: 发布 v1.0.1" && git push
+
+# ② Windows 机器：拉到正确的版本号再打
+git pull
+cd backend ; uv sync
+cd ..\frontend ; npm install ; npm run build:win
+
+# ③ 开发机：打 mac 包
+cd frontend && npm run build:mac
+
+# ④ 回到「5. 提交并打 tag」，直接跳到打 tag 那步（提交已经推过了）
+```
+
+只发 mac 的话按上面的 1→7 顺序走就行，不用管这一小节。
+
+#### 5. 提交并打 tag
 
 ```bash
 cd ..
@@ -207,10 +241,14 @@ git tag v1.0.1                     # tag 名必须和 package.json 的版本一�
 git push origin v1.0.1
 ```
 
+这次提交**只应该包含 `package.json` / `package-lock.json` / `CHANGELOG.md` 三处改动**。
+功能代码在「1. 改版本号」之前就该提交干净了 —— 混在一起的话，回头想只看「发版那次
+改了什么」就翻不出来。（`release/` 在 `.gitignore` 里，`.dmg` / `.exe` 不会被误提交。）
+
 > 先推提交、再推 tag。如果 tag 打错了要挪位置，得删掉重建：
 > `git push origin :refs/tags/v1.0.1` 然后重新 `git tag` + `git push`。
 
-#### 5. 建 Release
+#### 6. 建 Release
 
 GitHub → **Releases → Draft a new release**
 
@@ -220,21 +258,30 @@ GitHub → **Releases → Draft a new release**
 | Release title | `v1.0.1 — <一句话说明>` |
 | Describe this release | **粘贴第 2 步写好的 CHANGELOG 段落**，别在这里另写一遍 |
 | Release label | 不填 |
-| 附件 | `frontend/release/AI-SmartReading-1.0.1.dmg` |
+| 附件 | `frontend/release/AI-SmartReading-1.0.1.dmg`（发了 Windows 版就一并传 `.exe`） |
 
 **两个坑**：
 
 - **附件名只能是纯英文。** GitHub 上传时会把中文剥掉 —— `AI智慧阅读-1.0.0.dmg` 会变成 `AI.-1.0.0.dmg`，下载的人会以为文件坏了。`electron-builder.json` 的 `artifactName` 已经配成英文，正常打包不会踩到；手工改过名的话自己留意。
 - **别传 `.blockmap` 和 `.yml`。** 那是 electron-builder 的增量更新元数据，没有配套的更新服务就没用，传上去只会让用户困惑。
 
-#### 6. 验证
+#### 7. 验证
+
+把 `files` 换成**你实际传上去的那些**：
 
 ```bash
-curl -sIL "https://github.com/<用户名>/smart_reading/releases/download/v1.0.1/AI-SmartReading-1.0.1.dmg" \
-  | grep -iE "^HTTP|content-length|content-disposition"
+files="AI-SmartReading-1.0.1.dmg"
+# 发了 Windows 版就补上：
+# files="$files AI-SmartReading-Setup-1.0.1.exe"
+
+for f in $files ; do
+  echo "── $f"
+  curl -sIL "https://github.com/shinwellku/smart_reading/releases/download/v1.0.1/$f" \
+    | grep -iE "^HTTP|content-length|content-disposition"
+done
 ```
 
-应当返回 `200`，且 `content-disposition` 里的文件名是完整的英文名。
+每条都应当返回 `200`，且 `content-disposition` 里的文件名是完整的英文名（不是被剥掉中文的 `AI.-1.0.1.dmg` 那种）。
 
 ## 📁 项目结构
 
