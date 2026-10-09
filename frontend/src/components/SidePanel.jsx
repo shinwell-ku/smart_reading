@@ -157,8 +157,13 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
           setWordRefresh(n => n + 1)
         }).catch(() => {})
       }
-    } catch (e) { setTranslateError(e.message || '网络错误'); setResultText('') }
-    setTranslating(false)
+    } catch (e) {
+      setTranslateError(e.message || '网络错误'); setResultText('')
+    } finally {
+      // 必须放在 finally：「未配置 AI 引擎」「接口返回错误」这两条路都是
+      // return 出去的，写在 try 后面根本执行不到，按钮会一直转圈。
+      setTranslating(false)
+    }
   }
 
   const fillPageText = async () => {
@@ -279,15 +284,17 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       }
 
       // 后端已不在跑：可能刚好完成，也可能是重启丢了进度
-      clearInterval(timer)
       if (p && p.error) {
+        clearInterval(timer)
         setExtracting(false); setProgress(null)
         message.error('知识抽取失败：' + p.error)
         return
       }
-      if (await finishIfGraphReady(bid)) return
+      if (await finishIfGraphReady(bid)) { clearInterval(timer); return }
 
-      // 没在跑、也没报错、图谱还没生成 —— 给几次重试的机会再下结论
+      // 没在跑、也没报错、图谱还没生成 —— 先别急着下结论，给几次重试机会。
+      // 注意 clearInterval 不能提到这段前面：一提就把轮询停了，missCount
+      // 永远到不了 3，extracting 一直是 true，按钮就一直转圈。
       if (++missCount >= 3) {
         clearInterval(timer)
         setExtracting(false); setProgress(null)
