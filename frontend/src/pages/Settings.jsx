@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Button, message, Modal, Switch, Slider, Select, Input, Form, Space, AutoComplete, Divider, Skeleton } from 'antd'
 import { SettingOutlined, CloudServerOutlined, DatabaseOutlined, ReadOutlined, ReloadOutlined, FolderOpenOutlined, SoundOutlined } from '@ant-design/icons'
@@ -86,6 +86,12 @@ export default function Settings({ open, onClose }) {
   const [configLoaded, setConfigLoaded] = useState(false)
 
   const [modelOptions, setModelOptions] = useState([])
+  // 模型下拉的展开状态 + 展开那一刻输入框里的值。
+  // AutoComplete 默认只在输入时才弹，而且会拿输入框里的现值去过滤选项 ——
+  // 配好模型（如 deepseek-chat）后再点开，列表被过滤得只剩一条，看着不像
+  // 下拉框。所以这里自己控制展开，并区分「刚点开」和「已经在搜」两种状态。
+  const [modelOpen, setModelOpen] = useState(false)
+  const modelAtOpen = useRef('')
   const [loadingModels, setLoadingModels] = useState(false)
 
   const [backingUp, setBackingUp] = useState(false)
@@ -133,7 +139,12 @@ export default function Settings({ open, onClose }) {
       if (r.error) { message.error(r.error); return }
       const list = r.models || []
       setModelOptions(list)
-      if (list.length) message.success(`获取到 ${list.length} 个模型`)
+      if (list.length) {
+        message.success(`获取到 ${list.length} 个模型`)
+        // 拉到了就直接摊开，省得用户再去点一下输入框
+        modelAtOpen.current = model
+        setModelOpen(true)
+      }
       else message.warning('该接口未返回任何模型')
     } catch (e) {
       message.error('获取模型列表失败：' + (e.message || '网络错误'))
@@ -320,8 +331,14 @@ export default function Settings({ open, onClose }) {
                 placeholder="gpt-4o-mini"
                 allowClear
                 style={{ flex: 1 }}
+                open={modelOpen}
+                onDropdownVisibleChange={setModelOpen}
+                onFocus={() => { modelAtOpen.current = model; setModelOpen(true) }}
+                onSelect={() => setModelOpen(false)}
                 filterOption={(input, option) =>
-                  option.value.toLowerCase().includes(input.toLowerCase())}
+                  // 输入框里还是点开时那个值 → 用户没在搜，给完整列表
+                  input === modelAtOpen.current
+                  || option.value.toLowerCase().includes(input.toLowerCase())}
               />
               <Button icon={<ReloadOutlined />} loading={loadingModels} onClick={loadModels}>
                 获取模型
