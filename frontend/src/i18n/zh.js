@@ -19,12 +19,31 @@ export default {
   'app.menu.about': '关于',
   'app.status.online': '服务已就绪',
   'app.status.offline': '服务离线',
+  'app.panel.tools': '工具',
+  'app.panel.collapse': '折叠右侧面板',
+  'app.panel.expand': '展开',
+
+  // ── 侧边工具面板的页签 ──
+  'side.tab.translate': '翻译',
+  'side.tab.vocabulary': '生词',
+  'side.tab.notes': '笔记',
+  'side.tab.bookmarks': '书签',
+  'side.tab.search': '搜索',
+  'side.tab.knowledge': '图谱',
 
   // ── 通用 ──
   'common.ok': '确定',
   'common.cancel': '取消',
   'common.pageNo': '第{page}页',
   'common.loading': '加载中...',
+
+  // ── 关于 ──
+  'about.title': '关于',
+  'about.tagline': 'AI 翻译 · 知识图谱 · 多格式阅读',
+  'about.slogan': '用心做好简单、高效、易用的小工具',
+  'about.donate': '开源不易，您的捐助是我前进的动力🙏',
+  'about.qrAlt': '赞赏码',
+  'about.qrLabel': '微信赞赏码',
 
   // ── 设置 · 通用 ──
   'settings.section.general': '通用',

@@ -13,12 +13,31 @@ export default {
   'app.menu.about': 'About',
   'app.status.online': 'Backend ready',
   'app.status.offline': 'Backend offline',
+  'app.panel.tools': 'Tools',
+  'app.panel.collapse': 'Collapse panel',
+  'app.panel.expand': 'Expand',
+
+  // ── Side panel tabs ──
+  'side.tab.translate': 'Translate',
+  'side.tab.vocabulary': 'Vocabulary',
+  'side.tab.notes': 'Notes',
+  'side.tab.bookmarks': 'Bookmarks',
+  'side.tab.search': 'Search',
+  'side.tab.knowledge': 'Graph',
 
   // ── Common ──
   'common.ok': 'OK',
   'common.cancel': 'Cancel',
   'common.pageNo': 'Page {page}',
   'common.loading': 'Loading...',
+
+  // ── About ──
+  'about.title': 'About',
+  'about.tagline': 'AI translation · Knowledge graph · Multi-format reading',
+  'about.slogan': 'Crafting small tools that are simple, fast and pleasant to use',
+  'about.donate': 'Open source takes real effort — your support keeps it going 🙏',
+  'about.qrAlt': 'Donation QR code',
+  'about.qrLabel': 'WeChat tip code',
 
   // ── Settings · General ──
   'settings.section.general': 'General',

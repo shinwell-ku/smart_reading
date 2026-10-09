@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Select, Button, Input, message, notification, Modal, Tooltip, Progress, Alert } from 'antd'
-import { DeleteOutlined, ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined, ZoomInOutlined, ZoomOutOutlined, SoundOutlined, PauseCircleOutlined, PlayCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ZoomInOutlined, ZoomOutOutlined, SoundOutlined, PauseCircleOutlined, PlayCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { useSpeech, useTtsPrefs, resolveVoice, isSupported as ttsSupported } from '../useSpeech'
+import { SIDE_TABS } from '../sideTabs'
+import { useI18n } from '../i18n'
 
 function cleanText(text) {
   if (!text) return ''
@@ -28,15 +30,6 @@ function cleanText(text) {
   return t
 }
 
-const TABS = [
-  { key: 'translate', label: '翻译', icon: '🌐' },
-  { key: 'vocabulary', label: '生词', icon: <BookOutlined /> },
-  { key: 'notes', label: '笔记', icon: '📝' },
-  { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
-  { key: 'search', label: '搜索', icon: <SearchOutlined /> },
-  { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
-]
-
 // 秒数 → 人类可读时长
 function fmtDuration(sec) {
   if (sec == null) return ''
@@ -47,6 +40,7 @@ function fmtDuration(sec) {
 }
 
 export default function SidePanel({ book, page, activeTab, onTabChange }) {
+  const { t } = useI18n()
   const [sourceText, setSourceText] = useState('')
   const [resultText, setResultText] = useState('')
   const [translateError, setTranslateError] = useState('')
@@ -89,8 +83,8 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
     if (speech.state === 'playing') return speech.pause()
     if (speech.state === 'paused') return speech.resume()
     if (!ttsSupported) { message.warning('当前环境不支持语音合成'); return }
-    const t = sourceText.trim()
-    if (!t) { message.info('请先输入或选中要朗读的文本'); return }
+    const text = sourceText.trim()
+    if (!text) { message.info('请先输入或选中要朗读的文本'); return }
     if (!ttsVoice) {
       // 不静默降级：宁可不出声，也不能拿英文声音念中文
       notification.warning({
@@ -100,7 +94,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       })
       return
     }
-    speech.speak(t, { voice: ttsVoice, rate: ttsPrefs.rate })
+    speech.speak(text, { voice: ttsVoice, rate: ttsPrefs.rate })
   }
 
   useEffect(() => {
@@ -142,18 +136,18 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
 
 
   const translate = async () => {
-    const t = sourceText.trim()
-    if (!t) { message.info('请输入文本'); return }
+    const text = sourceText.trim()
+    if (!text) { message.info('请输入文本'); return }
     setTranslating(true)
     setResultText('⏳ 翻译中...')
     setTranslateError('')
     try {
-      const r = await api.translate({ text: t, source_lang: sourceLang, target_lang: targetLang })
+      const r = await api.translate({ text: text, source_lang: sourceLang, target_lang: targetLang })
       if (r.error) { setTranslateError(r.error); setResultText(''); return }
       setResultText(r.translated_text || '')
       // 自动保存生词
       if (r.translated_text && book) {
-        api.saveWord({ book_id: book.id, word: t, translation: r.translated_text || '', page_num: page }).then(() => {
+        api.saveWord({ book_id: book.id, word: text, translation: r.translated_text || '', page_num: page }).then(() => {
           setWordRefresh(n => n + 1)
         }).catch(() => {})
       }
@@ -443,7 +437,7 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
           <div className="panel-body" style={{ flex: 1 }}>
             <div className="panel-controls">
               <Select value={sourceLang} onChange={setSourceLang} size="small" style={{ width: 140 }} options={langOpts} />
-              <Button size="small" onClick={() => { const s = sourceLang; const t = targetLang === 'auto' ? 'en' : targetLang; setSourceLang(t); setTargetLang(s === 'auto' ? 'en' : s) }}>⇄</Button>
+              <Button size="small" onClick={() => { const s = sourceLang; const tgt = targetLang === 'auto' ? 'en' : targetLang; setSourceLang(tgt); setTargetLang(s === 'auto' ? 'en' : s) }}>⇄</Button>
               <Select value={targetLang} onChange={setTargetLang} size="small" style={{ width: 140 }} options={langOpts.filter(o => o.value !== 'auto')} />
               <Button type="primary" size="small" onClick={translate} loading={translating}>翻译</Button>
               <Button size="small" onClick={fillPageText}>当前页</Button>
@@ -707,12 +701,12 @@ export default function SidePanel({ book, page, activeTab, onTabChange }) {
       </div>
       {/* 右侧竖排 tab 标签 */}
       <div className="tab-rail" style={{ width: 56, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #e4e7ed', flexShrink: 0, alignItems: 'center' }}>
-        {TABS.map(tab => (
+        {SIDE_TABS.map(tab => (
           <div key={tab.key}
             onClick={() => onTabChange(tab.key)}
             style={{ padding: '12px 0 8px', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #e4e7ed', color: tab.key === activeTab ? '#1677ff' : '#909399', width: '100%', background: tab.key === activeTab ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${tab.key === activeTab ? '#1677ff' : 'transparent'}`, transition: 'all 0.15s' }}>
             <div style={{ fontSize: 20 }}>{tab.icon}</div>
-            <div style={{ fontSize: 10, marginTop: 2, fontWeight: tab.key === activeTab ? 600 : 400 }}>{tab.label}</div>
+            <div style={{ fontSize: 10, marginTop: 2, fontWeight: tab.key === activeTab ? 600 : 400 }}>{t(tab.i18n)}</div>
           </div>
         ))}
       </div>

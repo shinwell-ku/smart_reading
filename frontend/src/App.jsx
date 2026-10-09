@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Modal } from 'antd'
-import { ApartmentOutlined, StarOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons'
 import { api } from './api'
 import Library from './pages/Library'
 import Reader from './pages/Reader'
 import SidePanel from './components/SidePanel'
 import Settings from './pages/Settings'
 import AboutModal from './pages/About'
+import { SIDE_TABS, SIDE_TAB_KEYS } from './sideTabs'
+import { useI18n } from './i18n'
 
 export default function App() {
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useState('library')
   const [currentBook, setCurrentBook] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -57,7 +59,7 @@ export default function App() {
 
   const handleMenu = (tab) => {
     if (tab === 'reader' && !currentBook) return
-    if (['translate', 'vocabulary', 'notes', 'bookmarks', 'search', 'knowledge'].includes(tab)) {
+    if (SIDE_TAB_KEYS.includes(tab)) {
       if (!currentBook) return
       setActiveTab('reader')
       setSideTab(tab)
@@ -76,16 +78,16 @@ export default function App() {
       {/* TopBar */}
       <div className="topbar">
         <div className="topbar-logo">
-          <img src="./logo.png" alt="" /> AI智慧阅读
+          <img src="./logo.png" alt="" /> {t('app.title')}
         </div>
-        <Button className={`topbar-btn ${activeTab === 'library' ? 'active' : ''}`} onClick={() => handleMenu('library')}>📚 书库</Button>
-        <Button className={`topbar-btn ${activeTab === 'reader' ? 'active' : ''}`} disabled={!currentBook} onClick={() => handleMenu('reader')}>📖 阅读</Button>
-        <Button className="topbar-btn" onClick={() => setSettingsOpen(true)}>⚙️ 设置</Button>
-        <Button className="topbar-btn" onClick={() => setAboutOpen(true)}>ℹ️ 关于</Button>
+        <Button className={`topbar-btn ${activeTab === 'library' ? 'active' : ''}`} onClick={() => handleMenu('library')}>📚 {t('app.menu.library')}</Button>
+        <Button className={`topbar-btn ${activeTab === 'reader' ? 'active' : ''}`} disabled={!currentBook} onClick={() => handleMenu('reader')}>📖 {t('app.menu.reader')}</Button>
+        <Button className="topbar-btn" onClick={() => setSettingsOpen(true)}>⚙️ {t('app.menu.settings')}</Button>
+        <Button className="topbar-btn" onClick={() => setAboutOpen(true)}>ℹ️ {t('app.menu.about')}</Button>
         <div className="topbar-spacer" />
         <div className="topbar-status">
           <span className={`status-dot ${backendOnline ? 'online' : 'offline'}`} />
-          {backendOnline ? '服务已就绪' : '服务离线'}
+          {backendOnline ? t('app.status.online') : t('app.status.offline')}
         </div>
       </div>
 
@@ -123,8 +125,8 @@ export default function App() {
             <div className={'split-right' + (panelCollapsed ? ' collapsed' : '')} style={{ width: panelCollapsed ? 0 : panelWidth, position: 'relative' }}>
               {!panelCollapsed && (
                 <div className="reader-toolbar" style={{ justifyContent: 'space-between' }}>
-                  <span className="reader-title">工具</span>
-                  <Button type="text" onClick={() => setPanelCollapsed(true)} title="折叠右侧面板">»</Button>
+                  <span className="reader-title">{t('app.panel.tools')}</span>
+                  <Button type="text" onClick={() => setPanelCollapsed(true)} title={t('app.panel.collapse')}>»</Button>
                 </div>
               )}
               <SidePanel ref={panelRef} book={currentBook} page={currentPage} activeTab={sideTab} onTabChange={setSideTab} />
@@ -133,22 +135,15 @@ export default function App() {
             {panelCollapsed && (
               <div className="tab-rail" style={{ width: 56, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #e4e7ed' }}>
                 <div className="reader-toolbar" style={{ justifyContent: 'center', borderBottom: '1px solid #e4e7ed', flexShrink: 0 }}>
-                  <Button type="text" onClick={() => setPanelCollapsed(false)} title="展开" style={{ color: '#909399' }}>«</Button>
+                  <Button type="text" onClick={() => setPanelCollapsed(false)} title={t('app.panel.expand')} style={{ color: '#909399' }}>«</Button>
                 </div>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  {[
-                    { key: 'translate', label: '翻译', icon: '🌐' },
-                    { key: 'vocabulary', label: '生词', icon: <BookOutlined /> },
-                    { key: 'notes', label: '笔记', icon: '📝' },
-                    { key: 'bookmarks', label: '书签', icon: <StarOutlined /> },
-                    { key: 'search', label: '搜索', icon: <SearchOutlined /> },
-                    { key: 'knowledge', label: '图谱', icon: <ApartmentOutlined /> },
-                  ].map(tab => (
+                  {SIDE_TABS.map(tab => (
                     <div key={tab.key}
                       onClick={() => { setSideTab(tab.key); setPanelCollapsed(false) }}
                       style={{ padding: '10px 0 8px', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #e4e7ed', color: tab.key === sideTab ? '#1677ff' : '#909399', width: '100%', background: tab.key === sideTab ? '#e6f4ff' : 'transparent', borderLeft: `3px solid ${tab.key === sideTab ? '#1677ff' : 'transparent'}`, transition: 'all 0.15s' }}>
                       <div style={{ fontSize: 20 }}>{tab.icon}</div>
-                      <div style={{ fontSize: 10, marginTop: 2, fontWeight: tab.key === sideTab ? 600 : 400 }}>{tab.label}</div>
+                      <div style={{ fontSize: 10, marginTop: 2, fontWeight: tab.key === sideTab ? 600 : 400 }}>{t(tab.i18n)}</div>
                     </div>
                   ))}
                 </div>
