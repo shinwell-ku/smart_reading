@@ -168,7 +168,17 @@ npm version patch --no-git-tag-version     # patch 修 bug / minor 加功能 / m
 
 版本号是**单点来源**：安装包文件名（electron-builder 的 `${version}`）和「关于」页（`vite.config.js` 注入的 `__APP_VERSION__`）都从 `frontend/package.json` 取，改这一处就够。
 
-#### 2. 打包
+#### 2. 写 CHANGELOG
+
+打开 [CHANGELOG.md](CHANGELOG.md)，把 `## [未发布]` 改成 `## [1.0.1] - 2026-01-01`，
+分类有内容的才写（新增 / 变更 / 修复），末尾补一行对比链接。
+
+这段文字**后面要原样粘进 GitHub Release**，所以按「用户看得懂」写，不要照抄 commit：
+「翻译按钮一直转圈」而不是「fix: setTranslating 未复位」。
+
+写累积了好几版的，顺手在上面补一个空的 `## [未发布]`。
+
+#### 3. 打包
 
 ```bash
 npm run build:mac                  # → frontend/release/AI-SmartReading-1.0.1.dmg
@@ -181,7 +191,7 @@ cd backend ; uv sync
 cd ..\frontend ; npm run build:win
 ```
 
-#### 3. 提交并打 tag
+#### 4. 提交并打 tag
 
 ```bash
 cd ..
@@ -196,7 +206,7 @@ git push origin v1.0.1
 > 先推提交、再推 tag。如果 tag 打错了要挪位置，得删掉重建：
 > `git push origin :refs/tags/v1.0.1` 然后重新 `git tag` + `git push`。
 
-#### 4. 建 Release
+#### 5. 建 Release
 
 GitHub → **Releases → Draft a new release**
 
@@ -204,7 +214,7 @@ GitHub → **Releases → Draft a new release**
 |---|---|
 | Choose a tag | 选刚推上去的 `v1.0.1`（**选已有的**，不要在 Release 页新建同名 tag） |
 | Release title | `v1.0.1 — <一句话说明>` |
-| Describe this release | 写这一版改了什么 |
+| Describe this release | **粘贴第 2 步写好的 CHANGELOG 段落**，别在这里另写一遍 |
 | Release label | 不填 |
 | 附件 | `frontend/release/AI-SmartReading-1.0.1.dmg` |
 
@@ -213,7 +223,7 @@ GitHub → **Releases → Draft a new release**
 - **附件名只能是纯英文。** GitHub 上传时会把中文剥掉 —— `AI智慧阅读-1.0.0.dmg` 会变成 `AI.-1.0.0.dmg`，下载的人会以为文件坏了。`electron-builder.json` 的 `artifactName` 已经配成英文，正常打包不会踩到；手工改过名的话自己留意。
 - **别传 `.blockmap` 和 `.yml`。** 那是 electron-builder 的增量更新元数据，没有配套的更新服务就没用，传上去只会让用户困惑。
 
-#### 5. 验证
+#### 6. 验证
 
 ```bash
 curl -sIL "https://github.com/<用户名>/smart_reading/releases/download/v1.0.1/AI-SmartReading-1.0.1.dmg" \
@@ -260,6 +270,7 @@ smart_reading/
 │   └── exports/               # 导出/备份
 ├── scripts/
 │   └── build-package.mjs      # 安装包构建脚本（macOS / Windows 通用）
+├── CHANGELOG.md                # 更新日志（发版时写，并粘进 Release 说明）
 ├── LICENSE
 └── README.md
 ```
