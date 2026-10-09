@@ -513,9 +513,14 @@ export default function Reader({ book, onPageChange, onBack }) {
             </span>
           </>
         )}
-        <Tooltip title={continuous ? '关闭连续朗读（读完当前页会自动翻页）' : '连续朗读：读完当前页自动翻到下一页继续念'}>
+        {/* 连续朗读是个「模式」不是一次性动作 —— 只靠图标颜色区分太弱，
+            开启时给个底色，读起来就是「按下了」 */}
+        <Tooltip title={continuous ? '连续朗读已开启 · 点击关闭' : '连续朗读：读完当前页自动翻到下一页继续念'}>
           <Button type="text" onClick={() => setContinuous(v => !v)}
-                  style={{ color: continuous ? '#409eff' : undefined }} icon={<RetweetOutlined />} />
+                  icon={<RetweetOutlined />}
+                  style={continuous
+                    ? { color: '#409eff', background: '#e8f0fe' }
+                    : undefined} />
         </Tooltip>
         <Tooltip title="全屏"><Button type="text" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen() }}>⛶</Button></Tooltip>
       </div>
